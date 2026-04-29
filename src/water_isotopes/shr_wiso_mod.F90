@@ -27,11 +27,6 @@ module shr_wiso_mod
 
   use shr_kind_mod,  only: r8 => shr_kind_r8
   use shr_const_mod, only: SHR_CONST_TKTRIP
-!                           SHR_CONST_RSTD_H2ODEV, &
-!                           SHR_CONST_VSMOW_16O, &
-!                           SHR_CONST_VSMOW_18O, &
-!                           SHR_CONST_VSMOW_D , &
-!                           SHR_CONST_VSMOW_H
 
   implicit none
   private
@@ -66,11 +61,6 @@ module shr_wiso_mod
                                  !aka number of iso. atoms per molec.
   public :: wiso_ratio           !calculate mass ratio of isotope .
   public :: wiso_delta           !calculate the delta value for isotopes.
-
-
-!configuration pointers/indices   (Added from water_tracers - JN)
-!  integer, public :: iwspec(pcnst+pnats)     ! flag for water (isotope) species
-!  integer, public :: ixwti, ixwtx     ! lowest and highest index to search
 
 ! Species indicies - public so thay can be seen by water_tracers
   integer, parameter, public  :: ispundef = 0    ! Undefined
@@ -142,22 +132,6 @@ module shr_wiso_mod
       aksmc = (/ 0._r8, 0._r8, 0.00528_r8,   0.006_r8    /), &
       akrfa = (/ 0._r8, 0._r8, 0.2508e-3_r8, 0.285e-3_r8 /), &
       akrfb = (/ 0._r8, 0._r8, 0.7216e-3_r8, 0.82e-3_r8  /)
-
-! Coefficients for fractionation
-! TBD: Check to make sure that the entries for h216o are correct.
-!From Majoube, 1971a:
-!  real(r8), parameter, dimension(pwtspec) :: &  ! liquid/vapour
-!      alpal = (/ 0._r8, 0._r8, 24.844e+3_r8, 1.137e+3_r8   /) , &
-!      alpbl = (/ 0._r8, 0._r8, -76.248_r8,   -0.4156_r8    /) , &
-!      alpcl = (/ 0._r8, 0._r8, 52.612e-3_r8, -2.0667e-3_r8 /)
-
-!From Horita and Wesolowski, 1994:
-  real(r8), parameter, dimension(pwtspec) :: &  ! liquid/vapour
-      alpal = (/ 0._r8, 0._r8, 1158.8e-12_r8, 0.35041e+6_r8 /), &
-      alpbl = (/ 0._r8, 0._r8, -1620.1e-9_r8, -1.6664e+3_r8 /), &
-      alpcl = (/ 0._r8, 0._r8, 794.84e-6_r8, 6.7123_r8      /), &
-      alpdl = (/ 0._r8, 0._r8, -161.04e-3_r8, -7.685e-3_r8  /), &
-      alpel = (/ 0._r8, 0._r8, 2.9992e+6_r8, 0._r8 /)
 
 !isoCAM3 values:
 !  real(r8), parameter, dimension(pwtspec) :: &  ! ice/vapour
