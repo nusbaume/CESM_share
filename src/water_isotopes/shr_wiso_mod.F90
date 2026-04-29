@@ -45,7 +45,7 @@ module shr_wiso_mod
 
   !Fractionation routines:
 
-  public :: wiso_alpl            ! look-up liquid/vapor equil. fractn.
+  public :: wiso_liq_vap_equil_frac_factor ! Function for calculating liquid/vapor equilibrium fractionation factor
   public :: wiso_alpi            ! look-up ice/vapor equil. fractn.
   public :: wiso_kmol            ! kinetic effects for ocean evap (Brutsaert)
   public :: wiso_kmolv10         ! kmol (as above) from 10 meter wind (M&J)
@@ -322,36 +322,60 @@ contains
   end subroutine wiso_kmolv10
 
 !=======================================================================
-  function wiso_alpl(isp,tk)
+  pure function wiso_liq_vap_equil_frac_factor(isp,tk) result(equil_frac)
 !-----------------------------------------------------------------------
-! Purpose: return liquid/vapour fractionation from look-up tables
-! Author: David Noone <dcn@caltech.edu> - Mon Jun 30 10:59:13 MDT 2003
+! Purpose: return liquid/vapour equilibrium fractionation factor
+
+! Citation:
+
+! Horita, J. and D. J. Wesolowski,
+! Liquid-vapor fractionation of oxygen and hydrogen isotopes of water from the freezing to the critical temperature
+! Geochimica et Cosmochimica Acta, 58, 16, August 1994
+! DOI: 10.1016/0016-7037(94)90096-5
 !-----------------------------------------------------------------------
-    integer , intent(in)        :: isp  ! species indes
-    real(r8), intent(in)        :: tk    ! temperature (k)
-    real(r8) :: wiso_alpl               ! return fractionation
+    ! Function input arguements
+    integer , intent(in)        :: isp  ! species index
+    real(r8), intent(in)        :: tk   ! Temperature (K)
+
+    ! Return value (equilibrium fractionation factor)
+    real(r8) :: equil_frac
+
+    ! Local parameters
+
+    ! Equation 5 (HDO) parameters:
+    real(r8), parameter :: &
+      alpal_HDO = 1158.8e-12_r8, &
+      alpbl_HDO = -1620.1e-9_r8, &
+      alpcl_HDO = 794.84e-6_r8, &
+      alpdl_HDO = -161.04e-3_r8, &
+      alpel_HDO = 2.9992e+6_r8
+
+    ! Equation 6 (H218O) parameters:
+    real(r8), parameter ::       &
+      alpal_18O = 0.35041e+6_r8, &
+      alpbl_18O = -1.6664e+3_r8, &
+      alpcl_18O = 6.7123_r8,     &
+      alpdl_18O = -7.685e-3_r8
 !-----------------------------------------------------------------------
 !
     if (isp == isph2o) then
-      wiso_alpl = 1._r8
+      ! No fractionation for H2O
+      equil_frac = 1._r8
       return
     end if
-!Majoube, 1971:
-!    wiso_alpl = exp(alpal(isp)/tk**2 + alpbl(isp)/tk + alpcl(isp))
 
-!Horita and Wesolowski, 1994:
-    if(isp == isphdo) then !HDO has different formulation:
-      wiso_alpl = exp(alpal(isp)*tk**3 + alpbl(isp)*tk**2 + alpcl(isp)*tk + alpdl(isp) + alpel(isp)/tk**3)
+    if(isp == isphdo) then !HDO has a different formulation:
+      ! Equation 5 in Horita and Wesolowski, 1994
+      equil_frac = exp(alpal_HDO*tk**3 + alpbl_HDO*tk**2 + alpcl_HDO*tk + alpdl_HDO + alpel_HDO/tk**3)
+    else if(isp == isph218o) then
+      ! Equation 6 in Horit and Wesolowski, 1994
+      equil_frac = exp(alpal_18O/tk**3 + alpbl_18O/tk**2 + alpcl_18O/tk + alpdl_18O)
     else
-      wiso_alpl = exp(alpal(isp)/tk**3 + alpbl(isp)/tk**2 + alpcl(isp)/tk + alpdl(isp))
+      ! This situation shouldn't happen, so return a giant negative factor (which is unphysical)
+      equil_frac = -huge(1._r8)
     end if
 
-#ifdef NOFRAC
-    wiso_alpl = 1._r8
-#endif
-!
-    return
-  end function wiso_alpl
+  end function wiso_liq_vap_equil_frac_factor
 
 !=======================================================================
   function wiso_alpi(isp,tk)
@@ -508,7 +532,7 @@ end function wiso_akci
 !-----------------------------------------------------------------------
 !  use shr_kind_mod, only: r8 => shr_kind_r8
 !  use water_tracers, only: trace_water, wtrc_is_vap, iwspec, ixwti, ixwtx
-!  use water_isotopes, only: wisotope, wiso_kmol, wiso_alpl,wiso_get_roce, &
+!  use water_isotopes, only: wisotope, wiso_kmol, wiso_get_roce, &
 !                              wiso_alpi
 
   implicit none
@@ -544,7 +568,7 @@ end function wiso_akci
 !calculate isotopic factors
 !--------------------------
 !
-  alpha = wiso_alpl(iso,ts)                            !get equilibrium frac. factor
+  alpha = wiso_liq_vap_equil_frac_factor(iso,ts)  !get equilibrium frac. factor
  ! call wiso_kmolv10(iso,ustar,alpkn)                   !get kinetic frac. factor
   call wiso_kmol(iso,rbot,zbot,ustar,alpkn)            !Advanced kinetic frac. routine
 
