@@ -296,17 +296,20 @@ contains
   end subroutine wiso_kmolv10
 
 !=======================================================================
-  pure function wiso_liq_vap_equil_frac_factor(isp,tk) result(equil_frac)
-!-----------------------------------------------------------------------
-! Purpose: return liquid/vapour equilibrium fractionation factor
+! Liquid/Vapor equilibrium fractionation functions
+!=======================================================================
 
-! Citation:
+  function wiso_liq_vap_equil_frac_factor(isp,tk) result(equil_frac)
 
-! Horita, J. and D. J. Wesolowski,
-! Liquid-vapor fractionation of oxygen and hydrogen isotopes of water from the freezing to the critical temperature
-! Geochimica et Cosmochimica Acta, 58, 16, August 1994
-! DOI: 10.1016/0016-7037(94)90096-5
-!-----------------------------------------------------------------------
+    !-----------------------------------------------------------------------
+    ! Public function that returns liquid/vapor equilibrium
+    ! fractionation factor given the temperature and a
+    ! water isotope (isotopologue) species index.
+    !-----------------------------------------------------------------------
+
+    use shr_kind_mod, only: cl=>shr_kind_cl
+    use shr_sys_mod,  only: shr_sys_abort
+
     ! Function input arguements
     integer , intent(in)        :: isp  ! species index
     real(r8), intent(in)        :: tk   ! Temperature (K)
@@ -314,7 +317,58 @@ contains
     ! Return value (equilibrium fractionation factor)
     real(r8) :: equil_frac
 
-    ! Local parameters
+    ! Character array to store abort error message
+    character(len=cl) :: abort_msg
+
+    !-----------------------------------------------------------------------
+
+    ! Initialize the fractionation factor to a huge negative (unphysical) value:
+    equil_frac = -huge(1._r8)
+
+    select case  (isp)
+      case(isph2o)
+        ! No fractionation for H2O
+        equil_frac = 1._r8
+      case (isphdo)
+        ! Equation 5 in Horita and Wesolowski, 1994
+        equil_frac = horita_wesolowski_frac_factor_HDO(tk)
+      case (isph218o)
+        ! Equation 6 in Horit and Wesolowski, 1994
+        equil_frac = horita_wesolowski_frac_factor_18O(tk)
+      case default
+        ! This situation shouldn't happen, so return a giant negative factor (which is unphysical)
+        !equil_frac = -huge(1._r8)
+
+        ! This situation shouldn't happen, so abort the run
+        write(abort_msg,'(a,i0)') 'wiso_liq_vap_equil_frac_factor: ERROR: bad isotope species index; bad index = ', isp
+        call shr_sys_abort(abort_msg)
+    end select
+
+  end function wiso_liq_vap_equil_frac_factor
+
+!++++++++
+
+  pure function horita_wesolowski_frac_factor_HDO(tk) result(equil_frac_HDO)
+
+    !-----------------------------------------------------------------------
+    ! Calculate liquid/vapor equilibrium fractionation for HDO
+    !
+    ! Citation:
+    !
+    ! Equation 5 in:
+    !
+    ! Horita, J. and D. J. Wesolowski,
+    ! Liquid-vapor fractionation of oxygen and hydrogen isotopes of water from the freezing to the critical temperature
+    ! Geochimica et Cosmochimica Acta, 58, 16, August 1994
+    ! DOI: 10.1016/0016-7037(94)90096-5
+    !
+    !-----------------------------------------------------------------------
+
+    ! Function input arguements
+    real(r8), intent(in)  :: tk   ! Temperature (K)
+
+    ! Return value (HDO equilibrium fractionation factor)
+    real(r8) :: equil_frac_HDO
 
     ! Equation 5 (HDO) parameters:
     real(r8), parameter :: &
@@ -324,34 +378,54 @@ contains
       alpdl_HDO = -161.04e-3_r8, &
       alpel_HDO = 2.9992e+6_r8
 
-    ! Equation 6 (H218O) parameters:
+    !-----------------------------------------------------------------------
+
+    ! Equation 5 in Horita and Wesolowski, 1994
+    equil_frac_HDO = exp(alpal_HDO*tk**3 + alpbl_HDO*tk**2 + alpcl_HDO*tk + alpdl_HDO + alpel_HDO/tk**3)
+
+  end function horita_wesolowski_frac_factor_HDO
+
+!++++++++
+
+  pure function horita_wesolowski_frac_factor_18O(tk) result(equil_frac_18O)
+
+    !-----------------------------------------------------------------------
+    ! Calculate liquid/vapor equilibrium fractionation for H218O
+    !
+    ! Citation:
+    !
+    ! Equation 6 in:
+    !
+    ! Horita, J. and D. J. Wesolowski,
+    ! Liquid-vapor fractionation of oxygen and hydrogen isotopes of water from the freezing to the critical temperature
+    ! Geochimica et Cosmochimica Acta, 58, 16, August 1994
+    ! DOI: 10.1016/0016-7037(94)90096-5
+    !
+    !-----------------------------------------------------------------------
+
+    ! Function input arguements
+    real(r8), intent(in)  :: tk   ! Temperature (K)
+
+    ! Return value (H218O equilibrium fractionation factor)
+    real(r8) :: equil_frac_18O
+
+    ! Equation 6 (18O) parameters:
     real(r8), parameter ::       &
       alpal_18O = 0.35041e+6_r8, &
       alpbl_18O = -1.6664e+3_r8, &
       alpcl_18O = 6.7123_r8,     &
       alpdl_18O = -7.685e-3_r8
-!-----------------------------------------------------------------------
-!
-    if (isp == isph2o) then
-      ! No fractionation for H2O
-      equil_frac = 1._r8
-      return
-    end if
+    !-----------------------------------------------------------------------
 
-    if(isp == isphdo) then !HDO has a different formulation:
-      ! Equation 5 in Horita and Wesolowski, 1994
-      equil_frac = exp(alpal_HDO*tk**3 + alpbl_HDO*tk**2 + alpcl_HDO*tk + alpdl_HDO + alpel_HDO/tk**3)
-    else if(isp == isph218o) then
-      ! Equation 6 in Horit and Wesolowski, 1994
-      equil_frac = exp(alpal_18O/tk**3 + alpbl_18O/tk**2 + alpcl_18O/tk + alpdl_18O)
-    else
-      ! This situation shouldn't happen, so return a giant negative factor (which is unphysical)
-      equil_frac = -huge(1._r8)
-    end if
+    ! Equation 6 in Horita and Wesolowski, 1994
+    equil_frac_18O = exp(alpal_18O/tk**3 + alpbl_18O/tk**2 + alpcl_18O/tk + alpdl_18O)
 
-  end function wiso_liq_vap_equil_frac_factor
+  end function horita_wesolowski_frac_factor_18O
 
 !=======================================================================
+! Ice/Vapor equilibrium fractionation functions
+!=======================================================================
+
   function wiso_alpi(isp,tk)
 !-----------------------------------------------------------------------
 ! Purpose: return ice/vapour fractionation from loop-up tables

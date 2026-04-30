@@ -61,7 +61,7 @@ contains
    @Test
    subroutine test_shr_wiso_liq_vap_equil_frac_factor_bad_idx(this)
       ! Test that the liquid/vapor equilibrium fractionation factor
-      ! function returns an unphysical value when given a bad isotope
+      ! function raises an exception when given a bad isotope species
       ! index.
 
       use shr_wiso_mod, only: wiso_liq_vap_equil_frac_factor
@@ -76,7 +76,10 @@ contains
       bad_idx_frac = wiso_liq_vap_equil_frac_factor(bad_spec_idx, 273.15_r8)
 
       ! Check that the fractionation factor is negative huge:
-      @assertEqual(-huge(1._r8), bad_idx_frac)
+      !@assertEqual(-huge(1._r8), bad_idx_frac)
+
+      ! Check that an exception was raised:
+      @assertExceptionRaised("ABORTED: wiso_liq_vap_equil_frac_factor: ERROR: bad isotope species index; bad index = 78")
 
    end subroutine test_shr_wiso_liq_vap_equil_frac_factor_bad_idx
 
