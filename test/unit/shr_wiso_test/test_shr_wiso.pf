@@ -44,7 +44,7 @@ contains
 
       class(TestShrWiso), intent(inout) :: this
 
-      integer, parameter :: h2o_spec_idx = 1
+      integer, parameter :: h2o_spec_idx = 0
 
       real(r8)           :: h2o_liq_vap_frac
 
@@ -75,12 +75,58 @@ contains
       ! Try using a bad isotope index:
       bad_idx_frac = wiso_liq_vap_equil_frac_factor(bad_spec_idx, 273.15_r8)
 
-      ! Check that the fractionation factor is negative huge:
-      !@assertEqual(-huge(1._r8), bad_idx_frac)
-
       ! Check that an exception was raised:
       @assertExceptionRaised("ABORTED: wiso_liq_vap_equil_frac_factor: ERROR: bad isotope species index; bad index = 78")
 
    end subroutine test_shr_wiso_liq_vap_equil_frac_factor_bad_idx
+
+  ! ------------------------------------------------------------------------
+  ! Tests of wiso_ice_vap_equil_frac_factor function
+  ! ------------------------------------------------------------------------
+
+   @Test
+   subroutine test_shr_wiso_ice_vap_equil_frac_factor_h2o(this)
+      ! Test that the ice/vapor equilibrium fractionation factor
+      ! function produces correct values for H2O.
+
+      use shr_wiso_mod, only: wiso_ice_vap_equil_frac_factor
+
+      class(TestShrWiso), intent(inout) :: this
+
+      integer, parameter :: h2o_spec_idx = 0
+
+      real(r8)           :: h2o_ice_vap_frac
+
+      ! Calculate the fractionation factor for H216O (H2O):
+      h2o_ice_vap_frac = wiso_ice_vap_equil_frac_factor(h2o_spec_idx, 273.15_r8)
+
+      ! Check that a bulk (H2O) water species always returns one:
+      @assertEqual(1._r8, h2o_ice_vap_frac)
+
+   end subroutine test_shr_wiso_ice_vap_equil_frac_factor_h2o
+
+   !+++
+
+   @Test
+   subroutine test_shr_wiso_ice_vap_equil_frac_factor_bad_idx(this)
+      ! Test that the ice/vapor equilibrium fractionation factor
+      ! function raises an exception when given a bad isotope species
+      ! index.
+
+      use shr_wiso_mod, only: wiso_ice_vap_equil_frac_factor
+
+      class(TestShrWiso), intent(inout) :: this
+
+      integer, parameter :: bad_spec_idx = 78
+
+      real(r8)           :: bad_idx_frac
+
+      ! Try using a bad isotope index:
+      bad_idx_frac = wiso_ice_vap_equil_frac_factor(bad_spec_idx, 273.15_r8)
+
+      ! Check that an exception was raised:
+      @assertExceptionRaised("ABORTED: wiso_ice_vap_equil_frac_factor: ERROR: bad isotope species index; bad index = 78")
+
+   end subroutine test_shr_wiso_ice_vap_equil_frac_factor_bad_idx
 
 end module test_shr_wiso

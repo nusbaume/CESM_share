@@ -21,9 +21,6 @@ module shr_wiso_mod
 ! Module added to CESM's csm_share by:  Jesse Nusbaumer <nusbaume@colorado.edu> - March 2011
 !
 !-----------------------------------------------------------------------
-#undef NOFRAC          /* all fractionation factors = 1 */
-#undef NOKIN           /* all kinetic effects off */
-!-----------------------------------------------------------------------
 
   use shr_kind_mod,  only: r8 => shr_kind_r8
   use shr_const_mod, only: SHR_CONST_TKTRIP
@@ -33,15 +30,10 @@ module shr_wiso_mod
 
 ! Public interfaces
 
-  !Initialization routines:
-
-  public :: wiso_init            ! initilize water isotopes/tracers.
-  public :: wiso_get_ispec       ! lookup a species index by name
-
   !Fractionation routines:
 
   public :: wiso_liq_vap_equil_frac_factor ! Function for calculating liquid/vapor equilibrium fractionation factor
-  public :: wiso_alpi            ! look-up ice/vapor equil. fractn.
+  public :: wiso_ice_vap_equil_frac_factor ! Function for calculating ice/vapor equilibrium fractionation factor
   public :: wiso_kmol            ! kinetic effects for ocean evap (Brutsaert)
   public :: wiso_kmolv10         ! kmol (as above) from 10 meter wind (M&J)
   public :: wiso_akel            ! kinetic fractionation at liq. evaporation
@@ -57,12 +49,21 @@ module shr_wiso_mod
   !Data checking routines:
 
   public :: wiso_get_rstd        !retrive standard isotope ratio
+  public :: wiso_get_ispec       !lookup a species index by name
   public :: wiso_get_fisub       !retrive isotope subsitutions
                                  !aka number of iso. atoms per molec.
   public :: wiso_ratio           !calculate mass ratio of isotope .
   public :: wiso_delta           !calculate the delta value for isotopes.
 
 ! Species indicies - public so thay can be seen by water_tracers
+!NOTE: THESE SHOULD COME FROM 'shr_wtracer_mod.F90' once the share PR has been merged!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!  FIX THIS BEFORE OPENING PR!
+  integer, parameter :: WATER_SPECIES_TYPE_BULK = 0  ! This one is special: total/bulk water rather than a species
+  integer, parameter :: WATER_SPECIES_TYPE_H218O = 1
+  integer, parameter :: WATER_SPECIES_TYPE_H217O = 2
+  integer, parameter :: WATER_SPECIES_TYPE_HDO = 3
+  integer, parameter :: WATER_SPECIES_TYPE_MAXVAL = 3
+
+  !DELETE WHEN THESE PARAMETERS NO LONGER EXIST IN THIS FILE!!!!
   integer, parameter, public  :: ispundef = 0    ! Undefined
   integer, parameter, public  :: isph2o   = 1    ! H2O    ! "regular" water
   integer, parameter, public  :: isph216o = 2    ! H216O  ! H216O, nearly the same as "regular" water
@@ -133,33 +134,7 @@ module shr_wiso_mod
       akrfa = (/ 0._r8, 0._r8, 0.2508e-3_r8, 0.285e-3_r8 /), &
       akrfb = (/ 0._r8, 0._r8, 0.7216e-3_r8, 0.82e-3_r8  /)
 
-!isoCAM3 values:
-!  real(r8), parameter, dimension(pwtspec) :: &  ! ice/vapour
-!      alpai = (/ 0._r8, 0._r8, 16288._r8,   0._r8         /), &
-!      alpbi = (/ 0._r8, 0._r8, 0._r8,       11.839_r8     /), &
-!      alpci = (/ 0._r8, 0._r8, -9.34e-2_r8, -28.224e-3_r8 /)
-
-!From Merlivat & Nief,1967 for HDO, and Majoube, 1971b for H218O:
- real(r8), parameter, dimension(pwtspec) :: &  ! ice/vapour
-      alpai = (/ 0._r8, 0._r8, 16289._r8,   0._r8         /), &
-      alpbi = (/ 0._r8, 0._r8, 0._r8,       11.839_r8     /), &
-      alpci = (/ 0._r8, 0._r8, -9.45e-2_r8, -28.224e-3_r8 /)
-
 contains
-
-!-----------------------
-!Initialization routines:
-!-----------------------
-
-!=======================================================================
-  subroutine wiso_init
-!-----------------------------------------------------------------------
-! Purpose: Initialize module internal data arrays
-! Author: David Noone <dcn@caltech.edu> - Sun Jun 29 20:29:26 MDT 2003
-!-----------------------------------------------------------------------
-    write(6,*) 'WISO_INIT: Initializing water isotopes.'
-    return
-  end subroutine wiso_init
 
 !----------------------
 !Fractionation routines:
@@ -231,10 +206,6 @@ contains
 
       alpkn = 1._r8 - kmol
 
-#ifdef NOKIN
-!      alpkn = 1._r8
-#endif
-!
     return
   end subroutine wiso_kmol
 
@@ -287,11 +258,7 @@ contains
       end if
 !
       alpkn = 1._r8 - kmol
-!
-!#ifdef NOKIN
-!      alpkn = 1.0_r8
-!#endif
-!
+
     return
   end subroutine wiso_kmolv10
 
@@ -311,7 +278,7 @@ contains
     use shr_sys_mod,  only: shr_sys_abort
 
     ! Function input arguements
-    integer , intent(in)        :: isp  ! species index
+    integer , intent(in)        :: isp  ! water species type index (e.g., H2O, HDO, H218O)
     real(r8), intent(in)        :: tk   ! Temperature (K)
 
     ! Return value (equilibrium fractionation factor)
@@ -323,22 +290,19 @@ contains
     !-----------------------------------------------------------------------
 
     ! Initialize the fractionation factor to a huge negative (unphysical) value:
-    equil_frac = -huge(1._r8)
+    equil_frac = huge(-1._r8)
 
     select case  (isp)
-      case(isph2o)
+      case(WATER_SPECIES_TYPE_BULK)
         ! No fractionation for H2O
         equil_frac = 1._r8
-      case (isphdo)
+      case (WATER_SPECIES_TYPE_HDO)
         ! Equation 5 in Horita and Wesolowski, 1994
         equil_frac = horita_wesolowski_frac_factor_HDO(tk)
-      case (isph218o)
-        ! Equation 6 in Horit and Wesolowski, 1994
+      case (WATER_SPECIES_TYPE_H218O)
+        ! Equation 6 in Horita and Wesolowski, 1994
         equil_frac = horita_wesolowski_frac_factor_18O(tk)
       case default
-        ! This situation shouldn't happen, so return a giant negative factor (which is unphysical)
-        !equil_frac = -huge(1._r8)
-
         ! This situation shouldn't happen, so abort the run
         write(abort_msg,'(a,i0)') 'wiso_liq_vap_equil_frac_factor: ERROR: bad isotope species index; bad index = ', isp
         call shr_sys_abort(abort_msg)
@@ -426,28 +390,121 @@ contains
 ! Ice/Vapor equilibrium fractionation functions
 !=======================================================================
 
-  function wiso_alpi(isp,tk)
-!-----------------------------------------------------------------------
-! Purpose: return ice/vapour fractionation from loop-up tables
-! Author:  David Noone <dcn@caltech.edu> - Tue Jul  1 12:02:24 MDT 2003
-!-----------------------------------------------------------------------
-    integer , intent(in)        :: isp  ! species indes
-    real(r8), intent(in)        :: tk   ! temperature (k)
-    real(r8) :: wiso_alpi               ! return fractionation
-!-----------------------------------------------------------------------
-    if (isp == isph2o) then
-      wiso_alpi = 1._r8
-      return
-    end if
+  function wiso_ice_vap_equil_frac_factor(isp,tk) result(equil_frac)
 
-    wiso_alpi = exp(alpai(isp)/tk**2 + alpbi(isp)/tk + alpci(isp))
+    !-----------------------------------------------------------------------
+    ! Public function that returns ice/vapor equilibrium
+    ! fractionation factor given the temperature and a
+    ! water isotope (isotopologue) species index.
+    !-----------------------------------------------------------------------
 
-#ifdef NOFRAC
-    wiso_alpi = 1._r8
-#endif
-!
-    return
-end function wiso_alpi
+    use shr_kind_mod, only: cl=>shr_kind_cl
+    use shr_sys_mod,  only: shr_sys_abort
+
+    ! Function input arguements
+    integer , intent(in)        :: isp  ! water species type index (e.g., H2O, HDO, H218O)
+    real(r8), intent(in)        :: tk   ! Temperature (K)
+
+    ! Return value (equilibrium fractionation factor)
+    real(r8) :: equil_frac
+
+    ! Character array to store abort error message
+    character(len=cl) :: abort_msg
+
+    !-----------------------------------------------------------------------
+
+    ! Initialize the fractionation factor to a huge negative (unphysical) value:
+    equil_frac = huge(-1._r8)
+
+    select case  (isp)
+      case(WATER_SPECIES_TYPE_BULK)
+        ! No fractionation for H2O
+        equil_frac = 1._r8
+      case (WATER_SPECIES_TYPE_HDO)
+        ! Equation 5 in Merlivat and Nief, 1967
+        equil_frac = merlivat_nief_frac_factor_HDO(tk)
+      case (WATER_SPECIES_TYPE_H218O)
+        ! Equation from Majoube, 1971
+        equil_frac = majoube_frac_factor_18O(tk)
+      case default
+        ! This situation shouldn't happen, so abort the run
+        write(abort_msg,'(a,i0)') 'wiso_ice_vap_equil_frac_factor: ERROR: bad isotope species index; bad index = ', isp
+        call shr_sys_abort(abort_msg)
+    end select
+
+  end function wiso_ice_vap_equil_frac_factor
+
+!++++++++
+
+  pure function merlivat_nief_frac_factor_HDO(tk) result(equil_frac_HDO)
+
+    !-----------------------------------------------------------------------
+    ! Calculate ice/vapor equilibrium fractionation for HDO
+    !
+    ! Citation:
+    !
+    ! Equation 5 in:
+    !
+    ! Merlivat, L. and G. Nief,
+    ! Isotopic fractionation during change of state solid-vapour and liquid-vapour of water at temperatures below 0 degree C
+    ! Tellus, 19, 122-126, February 1967
+    ! DOI: 10.3402/tellusa.v19i1.9756
+    !
+    !-----------------------------------------------------------------------
+
+    ! Function input arguements
+    real(r8), intent(in)  :: tk   ! Temperature (K)
+
+    ! Return value (HDO equilibrium fractionation factor)
+    real(r8) :: equil_frac_HDO
+
+    ! Equation 5 (HDO) parameters:
+    real(r8), parameter ::   &
+      alpal_HDO = -9.45e-2_r8, &
+      alpbl_HDO = 16289._r8
+
+    !-----------------------------------------------------------------------
+
+    ! Equation 5 in Merlivat and Nief, 1967
+    equil_frac_HDO = exp(alpal_HDO + alpbl_HDO/tk**2)
+
+  end function merlivat_nief_frac_factor_HDO
+
+!++++++++
+
+  pure function majoube_frac_factor_18O(tk) result(equil_frac_18O)
+
+    !-----------------------------------------------------------------------
+    ! Calculate ice/vapor equilibrium fractionation for H218O
+    !
+    ! Citation:
+    !
+    ! Majoube, M.
+    ! Fractionnement en oxygene 18 et en deutérium entre l'eau et sa vapeur
+    ! Journal de Chimie Physique, 68, 1423–1436, 1971
+    ! DOI: 10.1051/jcp/1971681423
+    !
+    !-----------------------------------------------------------------------
+
+    ! Function input arguements
+    real(r8), intent(in)  :: tk   ! Temperature (K)
+
+    ! Return value (H218O equilibrium fractionation factor)
+    real(r8) :: equil_frac_18O
+
+    ! H218O equation parameters:
+    real(r8), parameter ::       &
+      alpal_18O = -28.224e-3_r8, &
+      alpbl_18O = 11.839_r8
+
+    !-----------------------------------------------------------------------
+
+    ! Equation from Majoube, 1971
+    equil_frac_18O = exp(alpal_18O + alpbl_18O/tk)
+
+  end function majoube_frac_factor_18O
+
+!=======================================================================
 
 !=======================================================================
 function wiso_akel(isp,tk,hum0,alpeq)
@@ -480,10 +537,6 @@ function wiso_akel(isp,tk,hum0,alpeq)
 ! Modify for non-standard isotope
 !
 !!    wiso_akel = wiso_akel**expk(isp)
-
-#ifdef NOKIN
-    wiso_akel = alpeq
-#endif
 
     return
 end function wiso_akel
@@ -518,10 +571,6 @@ end function wiso_akel
 ! Modify for non-standard isotope
 !
 !!    wiso_akci = wiso_akci**expk(isp)
-
-#ifdef NOKIN
-    wiso_akci = alpeq
-#endif
 !
     return
 end function wiso_akci
