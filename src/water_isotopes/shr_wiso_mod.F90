@@ -35,13 +35,11 @@ module shr_wiso_mod
   public :: wiso_liq_vap_equil_frac_factor ! Function for calculating liquid/vapor equilibrium fractionation factor
   public :: wiso_ice_vap_equil_frac_factor ! Function for calculating ice/vapor equilibrium fractionation factor
   public :: wiso_kmol            ! kinetic effects for ocean evap (Brutsaert)
-  public :: wiso_kmolv10         ! kmol (as above) from 10 meter wind (M&J)
   public :: wiso_akel            ! kinetic fractionation at liq. evaporation
   public :: wiso_akci            ! kinetic fractnation at ice condensation
 
   !Calculation routines:
 
-  public :: wiso_get_roce        ! retrive ocean isotope ratio.
   public :: wiso_flxoce          ! calculate isotopic ocean evaporation.
   public :: wiso_ssatf           ! supersaturation function
   public :: wiso_heff            ! effective humidity function
@@ -61,7 +59,6 @@ module shr_wiso_mod
   integer, parameter :: WATER_SPECIES_TYPE_H218O = 1
   integer, parameter :: WATER_SPECIES_TYPE_H217O = 2
   integer, parameter :: WATER_SPECIES_TYPE_HDO = 3
-  integer, parameter :: WATER_SPECIES_TYPE_MAXVAL = 3
 
   !DELETE WHEN THESE PARAMETERS NO LONGER EXIST IN THIS FILE!!!!
   integer, parameter, public  :: ispundef = 0    ! Undefined
@@ -121,18 +118,22 @@ module shr_wiso_mod
 !     rstd  = (/ SHR_CONST_RSTD_H2ODEV, SHR_CONST_VSMOW_16O, SHR_CONST_VSMOW_D, SHR_CONST_VSMOW_18O /)   ! natural abundance
 !     rstd  = (/ SHR_CONST_RSTD_H2ODEV, SHR_CONST_RSTD_H2ODEV, SHR_CONST_RSTD_H2ODEV, SHR_CONST_RSTD_H2ODEV /)   !all 1.0
 
-! Isotope enrichment at ocean surface (better to be computed or read from file)
-  real(r8), dimension(pwtspec), parameter :: &  ! mean ocean surface enrichent
-!      boce  = (/ 1._r8, 1._r8, 1.004_r8, 1.0005_r8 /)
-!      boce  = (/ 1._r8, 1._r8, 1.0128_r8, 1.0016_r8, 1.0008_r8, 1.00671_r8 /)  ! LGM
-      boce  = (/ 1._r8, 1._r8, 1._r8, 1._r8 /)
-
 ! Ocean surface kinetic fractionation parameters for M&J method:
 ! TBD: Check to make sure that the entries for h216o are correct.
   real(r8), parameter, dimension(pwtspec) :: &  ! surface kinetic exchange
       aksmc = (/ 0._r8, 0._r8, 0.00528_r8,   0.006_r8    /), &
       akrfa = (/ 0._r8, 0._r8, 0.2508e-3_r8, 0.285e-3_r8 /), &
       akrfb = (/ 0._r8, 0._r8, 0.7216e-3_r8, 0.82e-3_r8  /)
+
+! Interface definition for H218O equilibirum fractionation function,
+! so that the functions can then be passed into the H217O fractionation function.
+  abstract interface
+    pure function H218O_equil_func(tk) result(equil_frac_18O)
+      use, intrinsic :: iso_fortran_env, only: real64
+      real(real64), intent(in) :: tk ! Temperature (K)
+      real(real64) :: equil_frac_18O
+    end function
+  end interface
 
 contains
 
@@ -210,59 +211,6 @@ contains
   end subroutine wiso_kmol
 
 !=======================================================================
-  subroutine wiso_kmolv10(isp,ustar,alpkn)
-!-----------------------------------------------------------------------
-!
-! Purpose: compute kinetic modifier for drag coefficient (Merlivat &
-! Jouzel, 1979)
-!
-! Method:
-!    Uses everyones favorite empirical relation to 10 meter windspeed
-!
-! Author: David Noone <dcn@caltech.edu> - Mon Jun 30 14:05:38 MDT 2003
-!
-! Modified U(z=10 m) calculation: Jesse Nusbaumer <nusbaume@colorado.edu> - Sept.
-! 2011
-!
-!-----------------------------------------------------------------------
-    use shr_kind_mod, only: r8 => shr_kind_r8
-    use shr_const_mod, only: shr_const_g, shr_const_karman
-
-    implicit none
-
-    real(r8), parameter :: gravit = shr_const_g      ! gravity
-    real(r8), parameter :: karman = shr_const_karman ! Von Karman constant
-
-!---------------------------- Arguments --------------------------------
-    integer , intent(in)  :: isp          ! species flag
-    real(r8), intent(in)  :: ustar        !friction velocity
-!
-    real(r8), intent(out) :: alpkn ! kinetic fractionation fatcor
-
-!------------------------- Local Variables -----------------------------
-    real(r8) z0                 ! roughness length
-    real(r8) v10                ! 10 meter winds
-    real(r8) kmol               ! Merlivat's K_mol
-!-----------------------------------------------------------------------
-!
-    z0 = (ustar**2._r8)/(81.1_r8*gravit)      ! Charnock's equation
-!
-    v10 = ustar*log(10._r8/z0)/karman  !calculate U(z=10 m) wind speed.
-!
-! Compute the kinetic fractionation:
-!
-      if (v10 < 7.0_r8) then              ! smooth regime
-         kmol = aksmc(isp)
-      else                             ! rough regime
-         kmol = akrfa(isp)*v10 + akrfb(isp)
-      end if
-!
-      alpkn = 1._r8 - kmol
-
-    return
-  end subroutine wiso_kmolv10
-
-!=======================================================================
 ! Liquid/Vapor equilibrium fractionation functions
 !=======================================================================
 
@@ -296,12 +244,15 @@ contains
       case(WATER_SPECIES_TYPE_BULK)
         ! No fractionation for H2O
         equil_frac = 1._r8
-      case (WATER_SPECIES_TYPE_HDO)
-        ! Equation 5 in Horita and Wesolowski, 1994
-        equil_frac = horita_wesolowski_frac_factor_HDO(tk)
       case (WATER_SPECIES_TYPE_H218O)
         ! Equation 6 in Horita and Wesolowski, 1994
         equil_frac = horita_wesolowski_frac_factor_18O(tk)
+      case (WATER_SPECIES_TYPE_H217O)
+        ! Equation 3 from Barkan and Luz, 2005
+        equil_frac = barkan_luz_frac_factor_17O(tk, horita_wesolowski_frac_factor_18O)
+      case (WATER_SPECIES_TYPE_HDO)
+        ! Equation 5 in Horita and Wesolowski, 1994
+        equil_frac = horita_wesolowski_frac_factor_HDO(tk)
       case default
         ! This situation shouldn't happen, so abort the run
         write(abort_msg,'(a,i0)') 'wiso_liq_vap_equil_frac_factor: ERROR: bad isotope species index; bad index = ', isp
@@ -420,12 +371,15 @@ contains
       case(WATER_SPECIES_TYPE_BULK)
         ! No fractionation for H2O
         equil_frac = 1._r8
-      case (WATER_SPECIES_TYPE_HDO)
-        ! Equation 5 in Merlivat and Nief, 1967
-        equil_frac = merlivat_nief_frac_factor_HDO(tk)
       case (WATER_SPECIES_TYPE_H218O)
         ! Equation from Majoube, 1971
         equil_frac = majoube_frac_factor_18O(tk)
+      case (WATER_SPECIES_TYPE_H217O)
+        ! Equation 3 from Barkan and Luz, 2005
+        equil_frac = barkan_luz_frac_factor_17O(tk, majoube_frac_factor_18O)
+      case (WATER_SPECIES_TYPE_HDO)
+        ! Equation 5 in Merlivat and Nief, 1967
+        equil_frac = merlivat_nief_frac_factor_HDO(tk)
       case default
         ! This situation shouldn't happen, so abort the run
         write(abort_msg,'(a,i0)') 'wiso_ice_vap_equil_frac_factor: ERROR: bad isotope species index; bad index = ', isp
@@ -505,6 +459,40 @@ contains
   end function majoube_frac_factor_18O
 
 !=======================================================================
+! H217O equilibrium fractionation function
+!=======================================================================
+
+  pure function barkan_luz_frac_factor_17O(tk, equil_func_18O) result(equil_frac_17O)
+
+    !-----------------------------------------------------------------------
+    ! Calculate equilibrium fractionation factor for H217O (all phase changes)
+    !
+    ! Citation:
+    !
+    ! Equation 3 in:
+    !
+    ! Barkan, E. and Luz, B.,
+    ! High precision measurements of 17O/16O and 18O/16O ratios in H2O
+    ! Rapid Communications in Mass Spectrometry, 19, 3737-3742, November 2005
+    ! DOI: 10.1002/rcm.2250
+    !
+    !-----------------------------------------------------------------------
+
+    ! Function input arguements
+    real(r8), intent(in) :: tk                    ! Temperature (K)
+    procedure(H218O_equil_func) :: equil_func_18O ! Function to calculate 18O equilibrium fractionation
+
+    ! Return value (H217O equilibrium fractionation factor)
+    real(r8) :: equil_frac_17O
+
+    ! Equation 3 parameters:
+    real(r8), parameter :: theta = 0.529_r8
+
+    !-----------------------------------------------------------------------
+
+    equil_frac_17O = equil_func_18O(tk)**theta
+
+  end function barkan_luz_frac_factor_17O 
 
 !=======================================================================
 function wiso_akel(isp,tk,hum0,alpeq)
@@ -580,21 +568,6 @@ end function wiso_akci
 !--------------------
 
 !=======================================================================
-  function wiso_get_roce(isp)
-!-----------------------------------------------------------------------
-! Purpose: Retrieve internal Roce variable, based on species index
-! Author: David Noone <dcn@caltech.edu> - Sun Jun 29 20:29:04 MDT 2003
-!-----------------------------------------------------------------------
-    integer , intent(in)  :: isp          ! species index
-    real(r8) :: wiso_get_roce             ! return isotope ratio
-!-----------------------------------------------------------------------
-    wiso_get_roce = boce(isp)*rstd(isp)
-    return
-  end function wiso_get_roce
-
-!=======================================================================
-
-!=======================================================================
 
  subroutine wiso_flxoce( iso  ,rbot   ,zbot   ,wtbot   , &
                          ts     , rocn, ustar  ,re , &
@@ -629,7 +602,7 @@ end function wiso_akci
 !-----------------------------------------------------------------------
 !  use shr_kind_mod, only: r8 => shr_kind_r8
 !  use water_tracers, only: trace_water, wtrc_is_vap, iwspec, ixwti, ixwtx
-!  use water_isotopes, only: wisotope, wiso_kmol, wiso_get_roce, &
+!  use water_isotopes, only: wisotope, wiso_kmol, &
 !                              wiso_alpi
 
   implicit none
@@ -670,7 +643,7 @@ end function wiso_akci
   call wiso_kmol(iso,rbot,zbot,ustar,alpkn)            !Advanced kinetic frac. routine
 
   if(rocn .eq. 0._r8) then                             !no ocean model data:
-    Roce = wiso_get_roce(iso)                          !set to default value
+    Roce = wiso_get_rstd(iso)                          !set to default value
   else                                                 !isotopic ocean model present:
     R_std = wiso_get_rstd(iso)                         !pull ratio from ocean data
     Roce = R_std*rocn
