@@ -35,14 +35,11 @@ module shr_wiso_mod
   public :: wiso_liq_vap_equil_frac_factor ! Function for calculating liquid/vapor equilibrium fractionation factor
   public :: wiso_ice_vap_equil_frac_factor ! Function for calculating ice/vapor equilibrium fractionation factor
   public :: wiso_kmol            ! kinetic effects for ocean evap (Brutsaert)
-  public :: wiso_akel            ! kinetic fractionation at liq. evaporation
-  public :: wiso_akci            ! kinetic fractnation at ice condensation
 
   !Calculation routines:
 
   public :: wiso_flxoce          ! calculate isotopic ocean evaporation.
   public :: wiso_ssatf           ! supersaturation function
-  public :: wiso_heff            ! effective humidity function
 
   !Data checking routines:
 
@@ -124,16 +121,6 @@ module shr_wiso_mod
       aksmc = (/ 0._r8, 0._r8, 0.00528_r8,   0.006_r8    /), &
       akrfa = (/ 0._r8, 0._r8, 0.2508e-3_r8, 0.285e-3_r8 /), &
       akrfb = (/ 0._r8, 0._r8, 0.7216e-3_r8, 0.82e-3_r8  /)
-
-! Interface definition for H218O equilibirum fractionation function,
-! so that the functions can then be passed into the H217O fractionation function.
-  abstract interface
-    pure function H218O_equil_func(tk) result(equil_frac_18O)
-      use, intrinsic :: iso_fortran_env, only: real64
-      real(real64), intent(in) :: tk ! Temperature (K)
-      real(real64) :: equil_frac_18O
-    end function
-  end interface
 
 contains
 
@@ -232,6 +219,9 @@ contains
     ! Return value (equilibrium fractionation factor)
     real(r8) :: equil_frac
 
+    ! Local variable to save 18O fractionation factor for 17O calculation
+    real(r8) :: alpha_18O
+
     ! Character array to store abort error message
     character(len=cl) :: abort_msg
 
@@ -248,8 +238,10 @@ contains
         ! Equation 6 in Horita and Wesolowski, 1994
         equil_frac = horita_wesolowski_frac_factor_18O(tk)
       case (WATER_SPECIES_TYPE_H217O)
+        ! Equation 6 in Horita and Wesolowski, 1994
+        alpha_18O = horita_wesolowski_frac_factor_18O(tk)
         ! Equation 3 from Barkan and Luz, 2005
-        equil_frac = barkan_luz_frac_factor_17O(tk, horita_wesolowski_frac_factor_18O)
+        equil_frac = barkan_luz_frac_factor_17O(alpha_18O)
       case (WATER_SPECIES_TYPE_HDO)
         ! Equation 5 in Horita and Wesolowski, 1994
         equil_frac = horita_wesolowski_frac_factor_HDO(tk)
@@ -359,6 +351,9 @@ contains
     ! Return value (equilibrium fractionation factor)
     real(r8) :: equil_frac
 
+    ! Local variable to save 18O fractionation factor for 17O calculation
+    real(r8) :: alpha_18O
+
     ! Character array to store abort error message
     character(len=cl) :: abort_msg
 
@@ -375,8 +370,10 @@ contains
         ! Equation from Majoube, 1971
         equil_frac = majoube_frac_factor_18O(tk)
       case (WATER_SPECIES_TYPE_H217O)
+        ! 18O fractionation factor from Majoube, 1971
+        alpha_18O = majoube_frac_factor_18O(tk)
         ! Equation 3 from Barkan and Luz, 2005
-        equil_frac = barkan_luz_frac_factor_17O(tk, majoube_frac_factor_18O)
+        equil_frac = barkan_luz_frac_factor_17O(alpha_18O)
       case (WATER_SPECIES_TYPE_HDO)
         ! Equation 5 in Merlivat and Nief, 1967
         equil_frac = merlivat_nief_frac_factor_HDO(tk)
@@ -462,10 +459,11 @@ contains
 ! H217O equilibrium fractionation function
 !=======================================================================
 
-  pure function barkan_luz_frac_factor_17O(tk, equil_func_18O) result(equil_frac_17O)
+  pure function barkan_luz_frac_factor_17O(equil_factor_18O) result(equil_frac_17O)
 
     !-----------------------------------------------------------------------
-    ! Calculate equilibrium fractionation factor for H217O (all phase changes)
+    ! Calculate equilibrium fractionation factor for H217O (all phase changes),
+    ! given the H218O equilibrium fraction factor.
     !
     ! Citation:
     !
@@ -479,8 +477,7 @@ contains
     !-----------------------------------------------------------------------
 
     ! Function input arguements
-    real(r8), intent(in) :: tk                    ! Temperature (K)
-    procedure(H218O_equil_func) :: equil_func_18O ! Function to calculate 18O equilibrium fractionation
+    real(r8), intent(in) :: equil_factor_18O      ! Equilibrium fractionation factor for H218O.
 
     ! Return value (H217O equilibrium fractionation factor)
     real(r8) :: equil_frac_17O
@@ -490,78 +487,11 @@ contains
 
     !-----------------------------------------------------------------------
 
-    equil_frac_17O = equil_func_18O(tk)**theta
+    equil_frac_17O = equil_factor_18O**theta
 
-  end function barkan_luz_frac_factor_17O 
-
-!=======================================================================
-function wiso_akel(isp,tk,hum0,alpeq)
-!-----------------------------------------------------------------------
-! Purpose: return modified fractination for kinetic effects during
-!          liquid evaporation into unsaturated air.
-! Author:  David Noone <dcn@caltech.edu> - Tue Jul  1 12:02:24 MDT 2003
-!-----------------------------------------------------------------------
-    integer , intent(in)        :: isp   ! species indes
-    real(r8), intent(in)        :: tk    ! Temperature (K)
-    real(r8), intent(in)        :: hum0  ! initial humidity ()
-    real(r8), intent(in)        :: alpeq ! equilibrium fractionation factor
-    real(r8) :: wiso_akel                ! return effective fractionation
-    real(r8) :: h0                       ! humidity
-    real(r8) :: heff                     ! effective humidity
-    real(r8) :: difrmj                   ! diffusivity for iso. sub. hum.
-    real(r8) :: dondi                    ! (D / Di)^fdif, (rather than Di/D)
-!-----------------------------------------------------------------------
-!!    if (tk > tkinl) then              ! also do it for supercooled water
-      h0 = min(1.0_r8,hum0)
-!!      difrmj = difrm(isp)/fisub(isp)
-      difrmj = difrm(isp)
-      heff = wiso_heff(h0)
-      dondi = (1/difrmj)**dkfac
-      wiso_akel = alpeq*heff / (alpeq*dondi*(heff-1._r8) + 1._r8)
-!!    else
-!!      wiso_akel = alpeq
-!!    end if
-!
-! Modify for non-standard isotope
-!
-!!    wiso_akel = wiso_akel**expk(isp)
-
-    return
-end function wiso_akel
+  end function barkan_luz_frac_factor_17O
 
 !=======================================================================
-  function wiso_akci(isp,tk,alpeq)
-!-----------------------------------------------------------------------
-! Purpose: return modified fractination for kinetic effects during
-!          condensation to ice.
-!          Make use of supersaturation function.
-! Author:  David Noone <dcn@caltech.edu> - Tue Jul  1 12:02:24 MDT 2003
-!-----------------------------------------------------------------------
-    integer , intent(in)        :: isp   ! species indes
-    real(r8), intent(in)        :: tk    ! temperature (k)
-    real(r8), intent(in)        :: alpeq ! equilibrium fractionation factor
-    real(r8) :: wiso_akci               ! return effective fractionation
-    real(r8) :: sat1                    ! super sturation
-    real(r8) :: difrmj                  ! isotopic diffusion for subs. molec.
-    real(r8) :: dondi                   ! D / Di, (rather than Di/D)
-!-----------------------------------------------------------------------
-!
-    if (tk < tkini) then                ! anytime below freezing
-      sat1 = max(1._r8, wiso_ssatf(tk))
-!!      difrmj = difrm(isp)/fisub(isp)
-      difrmj = difrm(isp)
-      dondi = 1._r8/difrmj
-      wiso_akci = alpeq*sat1 / (alpeq*dondi*(sat1-1._r8) + 1._r8)
-    else
-      wiso_akci = alpeq
-    end if
-!
-! Modify for non-standard isotope
-!
-!!    wiso_akci = wiso_akci**expk(isp)
-!
-    return
-end function wiso_akci
 
 !--------------------
 !Calculation routines
@@ -680,19 +610,6 @@ end function wiso_akci
 
   return
 end subroutine wiso_flxoce
-
-!=======================================================================
- function wiso_heff(h0)
-!-----------------------------------------------------------------------
-! Purpose: Compute effective humidity (Jouzel type thing)
-! Author: David Noone <dcn@caltech.edu> - Fri Oct 24 12:06:55 PDT 2003
-!-----------------------------------------------------------------------
-    real(r8), intent(in)  :: h0       ! initial humidity
-    real(r8) :: wiso_heff             ! return humidity (subsaturation)
-!-----------------------------------------------------------------------
-    wiso_heff = min(1.0_r8, fkhum*h0 + 1.0_r8-fkhum)
-    return
-end function wiso_heff
 
 !=======================================================================
 function wiso_ssatf(tk)

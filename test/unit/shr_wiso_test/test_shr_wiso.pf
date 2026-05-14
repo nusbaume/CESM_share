@@ -2,9 +2,14 @@ module test_shr_wiso
 
    ! Tests of shr_wiso_mod
 
+   ! modules and kinds needed for testing infrastructure
    use funit
-   use shr_wiso_mod
    use shr_kind_mod, only: r8=>SHR_KIND_R8
+
+   ! shr_wiso_mod routines being tested
+   use shr_wiso_mod, only: wiso_liq_vap_equil_frac_factor
+   use shr_wiso_mod, only: wiso_ice_vap_equil_frac_factor
+
 
    implicit none
 
@@ -39,8 +44,6 @@ contains
    subroutine test_shr_wiso_liq_vap_equil_frac_factor_h2o(this)
       ! Test that the liquid/vapor equilibrium fractionation factor
       ! function produces correct values for H2O.
-
-      use shr_wiso_mod, only: wiso_liq_vap_equil_frac_factor
 
       class(TestShrWiso), intent(inout) :: this
 
@@ -89,8 +92,6 @@ contains
       ! Test that the ice/vapor equilibrium fractionation factor
       ! function produces correct values for H2O.
 
-      use shr_wiso_mod, only: wiso_ice_vap_equil_frac_factor
-
       class(TestShrWiso), intent(inout) :: this
 
       integer, parameter :: h2o_spec_idx = 0
@@ -112,8 +113,6 @@ contains
       ! Test that the ice/vapor equilibrium fractionation factor
       ! function raises an exception when given a bad isotope species
       ! index.
-
-      use shr_wiso_mod, only: wiso_ice_vap_equil_frac_factor
 
       class(TestShrWiso), intent(inout) :: this
 
