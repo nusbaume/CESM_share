@@ -1,201 +1,62 @@
 module shr_wiso_mod
 !-----------------------------------------------------------------------
 !
-! Provides the functions and constants needed to calculate the isotopc flux from
-! water on the ocean surface into the atmosphere.
+! This module provides the functions and constants needed to calculate
+! the isotopic fractionation of water during phase changes across all
+! modeled components of the Earth system.
 !
-! All interface routine are identified by wiso_*, etc.
-!
-! This code works over species indices, rather than the constituent indices
-! used in the water_tracers module. As such, MAKE SURE you call these
-! routines with species indicies! The tracer variable names do not need to
-! match the species names, which are privided just for diagnostic output.
-!
-! * This module MUST be includable by CAM and CLM * (be careful with uses)
-!
-!
-! This routine has a bunch of "qtiny" - which could be standardized.
-!
-! Original Code Author: David Noone <dcn@colorado.edu> - March 2003
-!
-! Module added to CESM's csm_share by:  Jesse Nusbaumer <nusbaume@colorado.edu> - March 2011
+! This module also provides a specialized routine for calculating the isotopic
+! flux during ocean/atmosphere exchanges, which is not currently owned by
+! a specific component model (at least in CESM).
 !
 !-----------------------------------------------------------------------
 
-  use shr_kind_mod,  only: r8 => shr_kind_r8
-  use shr_const_mod, only: SHR_CONST_TKTRIP
+  use shr_kind_mod,     only: r8 => shr_kind_r8
+  use shr_wtracers_mod, only: WATER_SPECIES_TYPE_BULK
+  use shr_wtracers_mod, only: WATER_SPECIES_TYPE_H218O
+  use shr_wtracers_mod, only: WATER_SPECIES_TYPE_H217O
+  use shr_wtracers_mod, only: WATER_SPECIES_TYPE_HDO
 
   implicit none
   private
 
+!++++++++++++++++++
 ! Public interfaces
+!++++++++++++++++++
 
-  !Fractionation routines:
+  ! Generic fractionation routines (used by most/all component models):
 
   public :: wiso_liq_vap_equil_frac_factor ! Function for calculating liquid/vapor equilibrium fractionation factor
   public :: wiso_ice_vap_equil_frac_factor ! Function for calculating ice/vapor equilibrium fractionation factor
-  public :: wiso_kmol            ! kinetic effects for ocean evap (Brutsaert)
 
-  !Calculation routines:
+  !Atmosphere-Ocean flux calculation routines (used only by the atm/ocn flux modules):
 
   public :: wiso_flxoce          ! calculate isotopic ocean evaporation.
-  public :: wiso_ssatf           ! supersaturation function
+  public :: wiso_kmol            ! kinetic effects for ocean evap (Brutsaert)
 
-  !Data checking routines:
-
-  public :: wiso_get_rstd        !retrive standard isotope ratio
-  public :: wiso_get_ispec       !lookup a species index by name
-  public :: wiso_get_fisub       !retrive isotope subsitutions
-                                 !aka number of iso. atoms per molec.
-  public :: wiso_ratio           !calculate mass ratio of isotope .
-  public :: wiso_delta           !calculate the delta value for isotopes.
-
-! Species indicies - public so thay can be seen by water_tracers
-!NOTE: THESE SHOULD COME FROM 'shr_wtracer_mod.F90' once the share PR has been merged!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!  FIX THIS BEFORE OPENING PR!
-  integer, parameter :: WATER_SPECIES_TYPE_BULK = 0  ! This one is special: total/bulk water rather than a species
-  integer, parameter :: WATER_SPECIES_TYPE_H218O = 1
-  integer, parameter :: WATER_SPECIES_TYPE_H217O = 2
-  integer, parameter :: WATER_SPECIES_TYPE_HDO = 3
-
-  !DELETE WHEN THESE PARAMETERS NO LONGER EXIST IN THIS FILE!!!!
-  integer, parameter, public  :: ispundef = 0    ! Undefined
-  integer, parameter, public  :: isph2o   = 1    ! H2O    ! "regular" water
-  integer, parameter, public  :: isph216o = 2    ! H216O  ! H216O, nearly the same as "regular" water
-  integer, parameter, public  :: isphdo   = 3    ! HDO
-  integer, parameter, public  :: isph218o = 4    ! H218O
-
-! Module parameters
-  integer , parameter, public :: pwtspec = 4    ! number of water species (h2o,hdo,h218o,h216o)
-
-! Tunable prameters for fractionation scheme
-  real(r8), parameter :: dkfac    = 0.58_r8           ! diffusive evap. kinetic power law
-!  real(r8), parameter :: tkini    = SHR_CONST_TKTRIP  ! min temp. for kinetic effects as ice appears
-!  real(r8), parameter :: tkini    = 258.15_r8         !From Bony et. al., 2008
-  real(r8), parameter :: tkini    = 253.15_r8         !From Jouzel and Merlivat, 1984
-
-  real(r8), parameter :: recrit   = 1.0_r8            ! critical raynolds number for kmol
-
-  real(r8), parameter :: fsata    = 1.000_r8          ! supersaturation peramater s = a +
-!bTdegC (Hoffman)
-!  real(r8), parameter :: fsatb    = -0.003_r8         ! supersaturation parameter s = a +
-  real(r8), parameter :: fsatb    = -0.002_r8         !tuned to match Antarctic d-excess in precip. - JN
-!bTdegC (Hoffman)
-  real(r8), parameter :: ssatmx   = 2.00_r8           ! maximum supersaturation
-  real(r8), parameter :: fkhum    = 0.25_r8           ! effective humidity factor
-  real(r8), parameter :: tzero    = SHR_CONST_TKTRIP  ! supercooled water in stratiform
-
-  character(len=8), dimension(pwtspec), parameter, public :: & ! species names
-      spnam  = (/ 'H2O     ', 'H216O   ', 'HD16O   ', 'H218O   ' /)
-
-! Private isotopic constants
-!
-
-!
+!++++++++++++++++++++++++++++++++++++++++++
 ! Physical constants for isotopic molecules
-!
-  real(r8), dimension(pwtspec), parameter :: &  ! isotopic subs.
-      fisub = (/ 1._r8, 1._r8, 2._r8, 1._r8 /)
+!++++++++++++++++++++++++++++++++++++++++++
 
-  ! TBD: Ideally this should be controlled by something like a namelist parameter,
-  ! but it needs to be something that can be made consistent between models.
-  real(r8), dimension(pwtspec), parameter :: &  ! diffusivity ratio (note D/H, not HDO/H2O)
-!     difrm = (/ 1._r8, 1._r8, 0.9836504_r8, 0.9686999_r8 /)   ! kinetic theory
-!      difrm = (/ 1._r8, 1._r8, 1._r8, 1._r8 /)                 ! no kinetic fractination
-!      difrm = (/ 1._r8, 1._r8, 0.9836504_r8, 0.9686999_r8 /)   ! this with expk
-!      difrm = (/ 1._r8, 1._r8, 0.9755_r8, 0.9723_r8 /)         ! Merlivat 1978 (tuned for isoCAM3)
-       difrm = (/ 1._r8, 1._r8, 0.9757_r8, 0.9727_r8 /)         ! Merlivat 1978 (direct from paper)
-!      difrm = (/ 1._r8, 1._r8, 0.9839_r8, 0.9691_r8 /)         ! Cappa etal 2003
+! Diffusivity ratios for HDO and H218O relative to H216O:
 
-! Prescribed isotopic ratios (largely arbitrary and tunable)
-  real(r8), dimension(pwtspec), parameter :: &  ! model standard isotope ratio
-!suggested by D. Noone:
-       rstd  = (/ 1._r8, 1._r8, 1._r8, 1._r8 /)                    ! best numerics
-!      rstd  = (/ 1._r8, 0.5_r8, 0.25_r8, 0.2_r8, 0.1_r8 /)         ! test numerics
-!     rstd  = (/ 1._r8, 0.9976_r8, 155.76e-6_r8, 2005.20e-6_r8 /)   ! natural abundance
-!     rstd  = (/ SHR_CONST_RSTD_H2ODEV, SHR_CONST_VSMOW_16O, SHR_CONST_VSMOW_D, SHR_CONST_VSMOW_18O /)   ! natural abundance
-!     rstd  = (/ SHR_CONST_RSTD_H2ODEV, SHR_CONST_RSTD_H2ODEV, SHR_CONST_RSTD_H2ODEV, SHR_CONST_RSTD_H2ODEV /)   !all 1.0
+! Values from:
 
-! Ocean surface kinetic fractionation parameters for M&J method:
-! TBD: Check to make sure that the entries for h216o are correct.
-  real(r8), parameter, dimension(pwtspec) :: &  ! surface kinetic exchange
-      aksmc = (/ 0._r8, 0._r8, 0.00528_r8,   0.006_r8    /), &
-      akrfa = (/ 0._r8, 0._r8, 0.2508e-3_r8, 0.285e-3_r8 /), &
-      akrfb = (/ 0._r8, 0._r8, 0.7216e-3_r8, 0.82e-3_r8  /)
+! Merlivat, L.,
+! Molecular diffusivities of H216O, HD16O, and H218O in gases
+! Journal of Chemical Physics, 69, 2864-2871, September 1978
+! DOI: 10.1063/1.436884
+
+real(r8), parameter :: DIFF_RATIO_HDO   = 0.9757_r8
+real(r8), parameter :: DIFF_RATIO_H218O = 0.9727_r8
+
+!=======================================================================
 
 contains
 
 !----------------------
 !Fractionation routines:
 !----------------------
-
-!=======================================================================
-  subroutine wiso_kmol(isp,rbot,zbot,ustar,alpkn)
-!-----------------------------------------------------------------------
-!
-! Purpose: compute kinetic modifier for drag coefficient (Merlivat & Jouzel)
-!
-! Method:
-!   Code solves Brutsaert equations for theturbulent layer using GCM computed
-!   quantities.  Operates on a vector of points.
-!
-! Author: David Noone <dcn@caltech.edu> - Mon Jun 30 14:05:38 MDT 2003
-!
-!-----------------------------------------------------------------------
-    use shr_kind_mod,  only: r8 => shr_kind_r8
-    use shr_const_mod, only: shr_const_g, shr_const_karman
-
-    implicit none
-
-    real(r8), parameter :: difair = 2.36e-5_r8          ! molecular diffusivity of air
-    real(r8), parameter :: muair  = 1.7e-5_r8           ! dynamic viscosity of air
-                                                     ! about 17 degC, 1.73 at STP (Salby)
-    real(r8), parameter :: gravit = shr_const_g      ! gravity
-    real(r8), parameter :: karman = shr_const_karman ! Von Karman constant
-
-!---------------------------- Arguments --------------------------------
-    integer , intent(in)  :: isp   ! species flag
-    real(r8), intent(in)  :: rbot  ! density of lowest layer (kg/m3)
-    real(r8), intent(in)  :: zbot  ! height of lowest level (m)
-    real(r8), intent(in)  :: ustar ! Friction velocity (m/s)
-!
-    real(r8), intent(out) :: alpkn ! kinetic fractionation factor (1-kmol)
-
-!------------------------- Local Variables -----------------------------
-    real(r8) z0                 ! roughness length (constant in cam 9.5e-5)
-    real(r8) reno               ! surface reynolds number
-    real(r8) tmr                ! ratio of turbulen to molecular resistance
-    real(r8) enn                ! diffusive power
-    real(r8) sc                 ! Schmidt number (Prandtl number)
-    real(r8) vmu                ! kinematic viscocity of air
-    real(r8) difn               ! ratio of difusivities to the power of n
-    real(r8) difrmj             ! isotopic diffusion with substitutions
-
-    real(r8) kmol               ! Merlivals k_mol
-!-----------------------------------------------------------------------
-!
-!!    difrmj = difrm(isp)/fisub(isp)
-    difrmj = difrm(isp)
-!
-      z0 = (ustar**2._r8)/(81.1_r8*gravit)  ! Charnock's equation
-      vmu = muair / rbot             ! kinematic viscosity
-      Sc  = vmu/difair
-      reno = ustar*z0 / vmu       ! reynolds number
-!
-      if (reno < recrit) then        ! Smooth (Re < 0.13)
-         enn = 2._r8/3._r8
-         tmr  = ( (1._r8/karman)*log(ustar*zbot / (30._r8 * vmu)) ) / (13.6_r8 * Sc**(2._r8/3._r8))
-      else                           ! Rough  (Re > 2)
-         enn = 1._r8/2._r8
-         tmr  = ( (1._r8/karman)*log(zbot/z0) - 5._r8) / (7.3_r8 * reno**(1._r8/4._r8) * Sc**(1._r8/2._r8))
-      end if
-
-      difn = (1._r8/difrmj)**enn        ! use D/Di, not Di/D
-      kmol = (difn - 1._r8) / (difn + tmr)
-
-      alpkn = 1._r8 - kmol
-
-    return
-  end subroutine wiso_kmol
 
 !=======================================================================
 ! Liquid/Vapor equilibrium fractionation functions
@@ -493,9 +354,9 @@ contains
 
 !=======================================================================
 
-!--------------------
-!Calculation routines
-!--------------------
+!------------------------------
+!Atmosphere/Ocean flux routines
+!------------------------------
 
 !=======================================================================
 
@@ -569,14 +430,14 @@ contains
 !--------------------------
 !
   alpha = wiso_liq_vap_equil_frac_factor(iso,ts)  !get equilibrium frac. factor
- ! call wiso_kmolv10(iso,ustar,alpkn)                   !get kinetic frac. factor
   call wiso_kmol(iso,rbot,zbot,ustar,alpkn)            !Advanced kinetic frac. routine
 
   if(rocn .eq. 0._r8) then                             !no ocean model data:
-    Roce = wiso_get_rstd(iso)                          !set to default value
+  ! Need to get 'roce' or 'rstd' from shr_wtracers_mod.
+    !    Roce = wiso_get_rstd(iso)                          !set to default value
   else                                                 !isotopic ocean model present:
-    R_std = wiso_get_rstd(iso)                         !pull ratio from ocean data
-    Roce = R_std*rocn
+!    R_std = wiso_get_rstd(iso)                         !pull ratio from ocean data
+!    Roce = R_std*rocn
   end if                                               !rocn value
 !
 !-----------------------------------------------
@@ -612,112 +473,92 @@ contains
 end subroutine wiso_flxoce
 
 !=======================================================================
-function wiso_ssatf(tk)
+  subroutine wiso_kmol(isp,rbot,zbot,ustar,alpkn)
 !-----------------------------------------------------------------------
-! Purpose: Compute supersaturation based on temperature parameterization.
-! Author: David Noone <dcn@caltech.edu> - Sun Jun 29 20:29:14 MDT 2003
+!
+! Purpose: compute kinetic modifier for drag coefficient (Merlivat & Jouzel)
+!
+! Method:
+!   Code solves Brutsaert equations for theturbulent layer using GCM computed
+!   quantities.  Operates on a vector of points.
+!
+! Author: David Noone <dcn@caltech.edu> - Mon Jun 30 14:05:38 MDT 2003
+!
 !-----------------------------------------------------------------------
-    real(r8), intent(in)  :: tk           ! temperature
-    real(r8) :: wiso_ssatf            ! return supersaturation
-!-----------------------------------------------------------------------
-#ifdef OLDWAY
-    wiso_ssatf = max(1.0_r8, fsata + fsatb*(tk-tzero))
-#else
-    wiso_ssatf = fsata + fsatb*(tk-tzero)
-!!    wiso_ssatf = max(wiso_ssatf, fsata)
-    wiso_ssatf = max(wiso_ssatf, 1.0_r8)
-    wiso_ssatf = min(wiso_ssatf, ssatmx)
-#endif
-    return
-end function wiso_ssatf
+    use shr_kind_mod,  only: r8 => shr_kind_r8
+    use shr_kind_mod,  only: cl => shr_kind_cl
+    use shr_const_mod, only: shr_const_g, shr_const_karman
+    use shr_sys_mod,   only: shr_sys_abort
 
-!----------------------
-!Data checking routines:
-!----------------------
+    implicit none
 
-!=======================================================================
-  function wiso_get_rstd(isp)
-!-----------------------------------------------------------------------
-! Purpose: Retrieve internal Rstd variable, based on species index
-! Author: David Noone <dcn@caltech.edu> - Sun Jun 29 20:29:14 MDT 2003
-!-----------------------------------------------------------------------
-    integer , intent(in)  :: isp          ! species index
-    real(r8) :: wiso_get_rstd             ! return isotope ratio
-!-----------------------------------------------------------------------
-    wiso_get_rstd = rstd(isp)
-    return
-  end function wiso_get_rstd
+    real(r8), parameter :: difair = 2.36e-5_r8          ! molecular diffusivity of air
+    real(r8), parameter :: muair  = 1.7e-5_r8           ! dynamic viscosity of air
+                                                     ! about 17 degC, 1.73 at STP (Salby)
+    real(r8), parameter :: gravit = shr_const_g      ! gravity
+    real(r8), parameter :: karman = shr_const_karman ! Von Karman constant
 
-!=======================================================================
-  function wiso_get_fisub(isp)
-!-----------------------------------------------------------------------
-! Purpose: Retrieve internal fisub variable, based on species index
-! Author: David Noone <dcn@caltech.edu> - Sun Jun 29 20:28:52 MDT 2003
-!-----------------------------------------------------------------------
-    integer , intent(in)  :: isp         ! species index
-    real(r8) :: wiso_get_fisub           ! return number of substitutions
-!-----------------------------------------------------------------------
-    wiso_get_fisub = fisub(isp)
-    return
-  end function wiso_get_fisub
+!---------------------------- Arguments --------------------------------
+    integer , intent(in)  :: isp   ! species flag
+    real(r8), intent(in)  :: rbot  ! density of lowest layer (kg/m3)
+    real(r8), intent(in)  :: zbot  ! height of lowest level (m)
+    real(r8), intent(in)  :: ustar ! Friction velocity (m/s)
+!
+    real(r8), intent(out) :: alpkn ! kinetic fractionation factor (1-kmol)
 
-!=======================================================================
-  function wiso_get_ispec(name)
+!------------------------- Local Variables -----------------------------
+    real(r8) z0                 ! roughness length (constant in cam 9.5e-5)
+    real(r8) reno               ! surface reynolds number
+    real(r8) tmr                ! ratio of turbulen to molecular resistance
+    real(r8) enn                ! diffusive power
+    real(r8) sc                 ! Schmidt number (Prandtl number)
+    real(r8) vmu                ! kinematic viscocity of air
+    real(r8) difn               ! ratio of difusivities to the power of n
+    real(r8) difrmj             ! isotopic diffusion with substitutions
+
+    real(r8) kmol               ! Merlivals k_mol
+
+    ! Character array to store abort error message
+    character(len=cl) :: abort_msg
+
+    real(r8), parameter :: recrit   = 1.0_r8  ! critical raynolds number for kmol
 !-----------------------------------------------------------------------
-! Purpose: Retrieve speciies index, based on species name
-! Author: Chuck Bardeen
-!-----------------------------------------------------------------------
-    character(len=*),  intent(in)  :: name  ! species name
-    integer  :: wiso_get_ispec              ! return species index
-!-----------------------------------------------------------------------
-    do wiso_get_ispec = 1, pwtspec
-      if (name == spnam(wiso_get_ispec)) then
-        return
+!
+    select case  (isp)
+      case(WATER_SPECIES_TYPE_BULK)
+        ! No kinetic fractionation for H2O
+        difrmj = 1._r8
+      case (WATER_SPECIES_TYPE_H218O)
+        difrmj = DIFF_RATIO_H218O
+      case (WATER_SPECIES_TYPE_H217O)
+        difrmj = DIFF_RATIO_H218O !NEED TO DOUBLE-CHECK!!!!
+      case (WATER_SPECIES_TYPE_HDO)
+        difrmj = DIFF_RATIO_HDO
+      case default
+        ! This situation shouldn't happen, so abort the run
+        write(abort_msg,'(a,i0)') 'wiso_kmol: ERROR: bad isotope species index; bad index = ', isp
+        call shr_sys_abort(abort_msg)
+    end select
+!
+      z0 = (ustar**2._r8)/(81.1_r8*gravit)  ! Charnock's equation
+      vmu = muair / rbot             ! kinematic viscosity
+      Sc  = vmu/difair
+      reno = ustar*z0 / vmu       ! reynolds number
+!
+      if (reno < recrit) then        ! Smooth (Re < 0.13)
+         enn = 2._r8/3._r8
+         tmr  = ( (1._r8/karman)*log(ustar*zbot / (30._r8 * vmu)) ) / (13.6_r8 * Sc**(2._r8/3._r8))
+      else                           ! Rough  (Re > 2)
+         enn = 1._r8/2._r8
+         tmr  = ( (1._r8/karman)*log(zbot/z0) - 5._r8) / (7.3_r8 * reno**(1._r8/4._r8) * Sc**(1._r8/2._r8))
       end if
-    end do
-    wiso_get_ispec = ispundef
-    return
-  end function wiso_get_ispec
 
-!=======================================================================
-  function wiso_ratio(isp,qiso,qtot)
-!-----------------------------------------------------------------------
-! Purpose: Compute isotopic ratio from masses, with numerical checks
-! Author David Noone <dcn@caltech.edu> - Tue Jul  1 08:32:45 MDT 2003
-!-----------------------------------------------------------------------
-    integer, intent(in)  :: isp         ! species index
-    real(r8),intent(in)  :: qiso        ! isotopic mass
-    real(r8),intent(in)  :: qtot        ! isotopic mass
-    real(r8) :: wiso_ratio              ! return value
-!-----------------------------------------------------------------------
-! TBD: This qtiny is different than found in the equivalent routine in
-! water _tracers. Also, this value is larger than the smallest support
-! mixing ratios, and probably should be made smaller so as not to
-! produce incorrect ratios for small values.
-    real(r8) :: qtiny = 1.e-16_r8
-!-----------------------------------------------------------------------
-    if (qtot > 0._r8) then
-      wiso_ratio = qiso/(qtot+qtiny)
-    else
-      wiso_ratio = qiso/(qtot-qtiny)
-    end if
-!!    wiso_ratio = espmw(isp)*wiso_ratio/fisum(isp)      ! correct!
-  end function wiso_ratio
+      difn = (1._r8/difrmj)**enn        ! use D/Di, not Di/D
+      kmol = (difn - 1._r8) / (difn + tmr)
 
-!=======================================================================
-  function wiso_delta(isp,qiso,qtot)
-!-----------------------------------------------------------------------
-! Purpose: Compute isotopic delta value from masses
-! Author David Noone <dcn@caltech.edu> - Tue Jul  1 08:32:45 MDT 2003
-!-----------------------------------------------------------------------
-    integer, intent(in)  :: isp         ! species index
-    real(r8),intent(in)  :: qiso        ! isotopic mass
-    real(r8),intent(in)  :: qtot        ! isotopic mass
-    real(r8) :: wiso_delta              ! return value
-!-----------------------------------------------------------------------
-    wiso_delta = 1000._r8 * (wiso_ratio(isp,qiso,qtot) / Rstd(isp) - 1._r8)
-    return
-  end function wiso_delta
+      alpkn = 1._r8 - kmol
+
+  end subroutine wiso_kmol
 
 !=========================================================================
 end module shr_wiso_mod
