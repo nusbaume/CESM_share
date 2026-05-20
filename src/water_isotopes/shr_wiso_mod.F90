@@ -49,6 +49,17 @@ module shr_wiso_mod
 real(r8), parameter :: DIFF_RATIO_HDO   = 0.9757_r8
 real(r8), parameter :: DIFF_RATIO_H218O = 0.9727_r8
 
+! Diffusivity ratio for H217O relative to H216O:
+
+! Exponent value from:
+
+! Barkan, E. and B. Luz,
+! Diffusivity fractionations of HO/HO and HO/HO in air and their implications for isotope hydrology
+! Rapid Communications in Mass Spectrometry, 21, 2999-3005, August 2007
+! DOI: 10.1002/rcm.3180
+
+real(r8), parameter :: DIFF_RATIO_H217O = DIFF_RATIO_H218O**0.5185
+
 !=======================================================================
 
 contains
@@ -426,7 +437,7 @@ contains
       case (WATER_SPECIES_TYPE_H218O)
         diff_ratio = DIFF_RATIO_H218O
       case (WATER_SPECIES_TYPE_H217O)
-        diff_ratio = DIFF_RATIO_H218O !NEED TO DOUBLE-CHECK!!!!
+        diff_ratio = DIFF_RATIO_H217O
       case (WATER_SPECIES_TYPE_HDO)
         diff_ratio = DIFF_RATIO_HDO
       case default
@@ -438,7 +449,7 @@ contains
     !--------------------------
     !calculate isotopic factors
     !--------------------------
-    
+
     alpha = wiso_liq_vap_equil_frac_factor(iso,ts)  ! equilibrium frac. factor
 
     alpkn = icam_atm_ocn_kinetic_frac_factor(iso,rbot,zbot,ustar,diff_ratio) ! kinetic frac. factor
@@ -446,7 +457,7 @@ contains
     !-----------------------------------------------
     ! Merlivat and Jouzel, 1979 version
     !-----------------------------------------------
-   
+
     ! TODO:  This is basically the bulk aerodynamic formula
     !        for water isotopes.  It might be good to have
     !        some way to ensure that the bulk water fluxes
@@ -466,9 +477,9 @@ contains
   end function wiso_flxoce
 
   !=======================================================================
- 
+
   pure function icam_atm_ocn_kinetic_frac_factor(iso,rbot,zbot,ustar, diff_ratio) result(alpkn)
- 
+
   !-----------------------------------------------------------------------
   !
   ! Private function to calculate the kinetic fractionation factor for
