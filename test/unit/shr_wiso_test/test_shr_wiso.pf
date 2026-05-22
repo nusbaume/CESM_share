@@ -6,6 +6,11 @@ module test_shr_wiso
    use funit
    use shr_kind_mod, only: r8=>SHR_KIND_R8
 
+   ! shr_wtracers_mod variables needed for testing:
+   use shr_wtracers_mod, only: WATER_SPECIES_TYPE_H218O
+   use shr_wtracers_mod, only: WATER_SPECIES_TYPE_H217O
+   use shr_wtracers_mod, only: WATER_SPECIES_TYPE_HDO
+
    ! shr_wiso_mod routines being tested
    use shr_wiso_mod, only: wiso_liq_vap_equil_frac_factor
    use shr_wiso_mod, only: wiso_ice_vap_equil_frac_factor
@@ -20,6 +25,15 @@ module test_shr_wiso
       procedure :: tearDown
    end type TestShrWiso
 
+   ! parameters useful for testing
+   !integer,  parameter :: ntemps = 9
+
+   real(r8), parameter :: liq_temps(9) = [233._r8, 243._r8, 253._r8, 263._r8, &
+                                          273._r8, 283._r8, 293._r8, 303._r8, 313._r8]
+
+   real(r8), parameter :: ice_temps(8) = [203._r8, 213._r8, 223._r8, 233._r8, &
+                                          243._r8, 253._r8, 263._r8, 273._r8]
+
 contains
 
   subroutine setUp(this)
@@ -28,12 +42,6 @@ contains
 
   subroutine tearDown(this)
      class(TestShrWiso), intent(inout) :: this
-
-     !integer :: rc
-
-     !if (shr_wtracers_initialized()) then
-     !   call shr_wtracers_finalize(rc)
-     !end if
   end subroutine tearDown
 
   ! ------------------------------------------------------------------------
@@ -43,7 +51,7 @@ contains
    @Test
    subroutine test_shr_wiso_liq_vap_equil_frac_factor_h2o(this)
       ! Test that the liquid/vapor equilibrium fractionation factor
-      ! function produces correct values for H2O.
+      ! function produces the correct value for H2O.
 
       class(TestShrWiso), intent(inout) :: this
 
@@ -67,8 +75,6 @@ contains
       ! function raises an exception when given a bad isotope species
       ! index.
 
-      use shr_wiso_mod, only: wiso_liq_vap_equil_frac_factor
-
       class(TestShrWiso), intent(inout) :: this
 
       integer, parameter :: bad_spec_idx = 78
@@ -82,6 +88,105 @@ contains
       @assertExceptionRaised("ABORTED: wiso_liq_vap_equil_frac_factor: ERROR: bad isotope species index; bad index = 78")
 
    end subroutine test_shr_wiso_liq_vap_equil_frac_factor_bad_idx
+
+  !+++
+
+   @Test
+   subroutine test_shr_wiso_liq_vap_equil_frac_factor_h218o_properties(this)
+      ! Test that the reciprocal of the H218O liquid/vapor equilibrium fractionation
+      ! factor lies strictly between 0 and 1 for temperatures from 233 K to 313 K,
+      ! and that the reciprocal increases with increasing temperature.
+
+      class(TestShrWiso), intent(inout) :: this
+   
+      real(r8) :: vap_liq_frac_18O       ! Reciprocal of the H218O liquid/vapor equilibrium fractionation factor
+      real(r8) :: vap_liq_frac_18O_prev
+      integer  :: i
+
+      ! Calculate first function value, and check that it is greater than zero:
+      vap_liq_frac_18O_prev = 1._r8 / wiso_liq_vap_equil_frac_factor(WATER_SPECIES_TYPE_H218O, liq_temps(1))
+
+      @assertTrue(vap_liq_frac_18O_prev > 0._r8)
+
+      ! Now loop over the rest of the temperatures, checking that the reciprocal (vapor/liquid)
+      ! values increase with increasing temperature:
+      do i = 2, size(liq_temps)
+         vap_liq_frac_18O = 1._r8 / wiso_liq_vap_equil_frac_factor(WATER_SPECIES_TYPE_H218O, liq_temps(i))
+   
+         @assertTrue(vap_liq_frac_18O > vap_liq_frac_18O_prev)
+         vap_liq_frac_18O_prev = vap_liq_frac_18O
+      end do
+
+      ! Finally, check that the last value is less than one:
+      @assertTrue(vap_liq_frac_18O < 1._r8)
+
+   end subroutine test_shr_wiso_liq_vap_equil_frac_factor_h218o_properties
+
+   !+++
+
+   @Test
+   subroutine test_shr_wiso_liq_vap_equil_frac_factor_h217o_properties(this)
+      ! Test that the reciprocal of the H217O liquid/vapor equilibrium fractionation
+      ! factor lies strictly between 0 and 1 for temperatures from 233 K to 313 K,
+      ! and that the reciprocal increases with increasing temperature.
+
+      class(TestShrWiso), intent(inout) :: this
+   
+      real(r8) :: vap_liq_frac_17O       ! Reciprocal of the H217O liquid/vapor equilibrium fractionation factor
+      real(r8) :: vap_liq_frac_17O_prev
+      integer  :: i
+
+      ! Calculate first function value, and check that it is greater than zero:
+      vap_liq_frac_17O_prev = 1._r8 / wiso_liq_vap_equil_frac_factor(WATER_SPECIES_TYPE_H217O, liq_temps(1))
+
+      @assertTrue(vap_liq_frac_17O_prev > 0._r8)
+
+      ! Now loop over the rest of the temperatures, checking that the reciprocal (vapor/liquid)
+      ! values increase with increasing temperature:
+      do i = 2, size(liq_temps)
+         vap_liq_frac_17O = 1._r8 / wiso_liq_vap_equil_frac_factor(WATER_SPECIES_TYPE_H217O, liq_temps(i))
+   
+         @assertTrue(vap_liq_frac_17O > vap_liq_frac_17O_prev)
+         vap_liq_frac_17O_prev = vap_liq_frac_17O
+      end do
+
+      ! Finally, check that the last value is less than one:
+      @assertTrue(vap_liq_frac_17O < 1._r8)
+
+   end subroutine test_shr_wiso_liq_vap_equil_frac_factor_h217o_properties
+
+   !+++
+
+   @Test
+   subroutine test_shr_wiso_liq_vap_equil_frac_factor_hdo_properties(this)
+      ! Test that the reciprocal of the HDO liquid/vapor equilibrium fractionation
+      ! factor lies strictly between 0 and 1 for temperatures from 233 K to 313 K,
+      ! and that the reciprocal increases with increasing temperature.
+
+      class(TestShrWiso), intent(inout) :: this
+   
+      real(r8) :: vap_liq_frac_HDO       ! Reciprocal of the HDO liquid/vapor equilibrium fractionation factor
+      real(r8) :: vap_liq_frac_HDO_prev
+      integer  :: i
+
+      ! Calculate first function value, and check that it is greater than zero:
+      vap_liq_frac_HDO_prev = 1._r8 / wiso_liq_vap_equil_frac_factor(WATER_SPECIES_TYPE_HDO, liq_temps(1))
+
+      @assertTrue(vap_liq_frac_HDO_prev > 0._r8)
+
+      ! Now loop over the rest of the temperatures, checking that the reciprocal (vapor/liquid)
+      ! values increase with increasing temperature:
+      do i = 2, size(liq_temps)
+         vap_liq_frac_HDO = 1._r8 / wiso_liq_vap_equil_frac_factor(WATER_SPECIES_TYPE_HDO, liq_temps(i))
+   
+         @assertTrue(vap_liq_frac_HDO > vap_liq_frac_HDO_prev)
+         vap_liq_frac_HDO_prev = vap_liq_frac_HDO
+      end do
+
+      ! Finally, check that the last value is less than one:
+      @assertTrue(vap_liq_frac_HDO < 1._r8)
+
+   end subroutine test_shr_wiso_liq_vap_equil_frac_factor_hdo_properties
 
   ! ------------------------------------------------------------------------
   ! Tests of wiso_ice_vap_equil_frac_factor function
@@ -127,5 +232,104 @@ contains
       @assertExceptionRaised("ABORTED: wiso_ice_vap_equil_frac_factor: ERROR: bad isotope species index; bad index = 78")
 
    end subroutine test_shr_wiso_ice_vap_equil_frac_factor_bad_idx
+
+   !+++
+
+   @Test
+   subroutine test_shr_wiso_ice_vap_equil_frac_factor_h218o_properties(this)
+      ! Test that the reciprocal of the H218O ice/vapor equilibrium fractionation
+      ! factor lies strictly between 0 and 1 for temperatures from 203 K to 273 K,
+      ! and that the reciprocal increases with increasing temperature.
+
+      class(TestShrWiso), intent(inout) :: this
+   
+      real(r8) :: vap_ice_frac_18O       ! Reciprocal of the H218O ice/vapor equilibrium fractionation factor
+      real(r8) :: vap_ice_frac_18O_prev
+      integer  :: i
+
+      ! Calculate first function value, and check that it is greater than zero:
+      vap_ice_frac_18O_prev = 1._r8 / wiso_ice_vap_equil_frac_factor(WATER_SPECIES_TYPE_H218O, ice_temps(1))
+
+      @assertTrue(vap_ice_frac_18O_prev > 0._r8)
+
+      ! Now loop over the rest of the temperatures, checking that the reciprocal (vapor/ice)
+      ! values increase with increasing temperature:
+      do i = 2, size(ice_temps)
+         vap_ice_frac_18O = 1._r8 / wiso_ice_vap_equil_frac_factor(WATER_SPECIES_TYPE_H218O, ice_temps(i))
+   
+         @assertTrue(vap_ice_frac_18O > vap_ice_frac_18O_prev)
+         vap_ice_frac_18O_prev = vap_ice_frac_18O
+      end do
+
+      ! Finally, check that the last value is less than one:
+      @assertTrue(vap_ice_frac_18O < 1._r8)
+
+   end subroutine test_shr_wiso_ice_vap_equil_frac_factor_h218o_properties
+
+   !+++
+
+   @Test
+   subroutine test_shr_wiso_ice_vap_equil_frac_factor_h217o_properties(this)
+      ! Test that the reciprocal of the H217O ice/vapor equilibrium fractionation
+      ! factor lies strictly between 0 and 1 for temperatures from 203 K to 273 K,
+      ! and that the reciprocal increases with increasing temperature.
+
+      class(TestShrWiso), intent(inout) :: this
+   
+      real(r8) :: vap_ice_frac_17O       ! Reciprocal of the H217O ice/vapor equilibrium fractionation factor
+      real(r8) :: vap_ice_frac_17O_prev
+      integer  :: i
+
+      ! Calculate first function value, and check that it is greater than zero:
+      vap_ice_frac_17O_prev = 1._r8 / wiso_ice_vap_equil_frac_factor(WATER_SPECIES_TYPE_H217O, ice_temps(1))
+
+      @assertTrue(vap_ice_frac_17O_prev > 0._r8)
+
+      ! Now loop over the rest of the temperatures, checking that the reciprocal (vapor/ice)
+      ! values increase with increasing temperature:
+      do i = 2, size(ice_temps)
+         vap_ice_frac_17O = 1._r8 / wiso_ice_vap_equil_frac_factor(WATER_SPECIES_TYPE_H217O, ice_temps(i))
+   
+         @assertTrue(vap_ice_frac_17O > vap_ice_frac_17O_prev)
+         vap_ice_frac_17O_prev = vap_ice_frac_17O
+      end do
+
+      ! Finally, check that the last value is less than one:
+      @assertTrue(vap_ice_frac_17O < 1._r8)
+
+   end subroutine test_shr_wiso_ice_vap_equil_frac_factor_h217o_properties
+
+   !+++
+
+   @Test
+   subroutine test_shr_wiso_ice_vap_equil_frac_factor_hdo_properties(this)
+      ! Test that the reciprocal of the HDO ice/vapor equilibrium fractionation
+      ! factor lies strictly between 0 and 1 for temperatures from 203 K to 273 K,
+      ! and that the reciprocal increases with increasing temperature.
+
+      class(TestShrWiso), intent(inout) :: this
+   
+      real(r8) :: vap_ice_frac_HDO       ! Reciprocal of the HDO ice/vapor equilibrium fractionation factor
+      real(r8) :: vap_ice_frac_HDO_prev
+      integer  :: i
+
+      ! Calculate first function value, and check that it is greater than zero:
+      vap_ice_frac_HDO_prev = 1._r8 / wiso_ice_vap_equil_frac_factor(WATER_SPECIES_TYPE_HDO, ice_temps(1))
+
+      @assertTrue(vap_ice_frac_HDO_prev > 0._r8)
+
+      ! Now loop over the rest of the temperatures, checking that the reciprocal (vapor/ice)
+      ! values increase with increasing temperature:
+      do i = 2, size(ice_temps)
+         vap_ice_frac_HDO = 1._r8 / wiso_ice_vap_equil_frac_factor(WATER_SPECIES_TYPE_HDO, ice_temps(i))
+   
+         @assertTrue(vap_ice_frac_HDO > vap_ice_frac_HDO_prev)
+         vap_ice_frac_HDO_prev = vap_ice_frac_HDO
+      end do
+
+      ! Finally, check that the last value is less than one:
+      @assertTrue(vap_ice_frac_HDO < 1._r8)
+
+   end subroutine test_shr_wiso_ice_vap_equil_frac_factor_hdo_properties
 
 end module test_shr_wiso
