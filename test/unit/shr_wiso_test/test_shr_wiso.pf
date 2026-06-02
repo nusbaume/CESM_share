@@ -94,25 +94,28 @@ contains
    @Test
    subroutine test_shr_wiso_liq_vap_equil_frac_factor_h218o_properties(this)
       ! Test that the reciprocal of the H218O liquid/vapor equilibrium fractionation
-      ! factor lies strictly between 0 and 1 for temperatures from 233 K to 313 K,
+      ! factor lies strictly between 0.7 and 1 for temperatures from 233 K to 313 K,
       ! and that the reciprocal increases with increasing temperature.
+      !
+      ! Note that technically 0.7 is physically possible, just significantly outside the temperature
+      ! range seen in the Earth System.
 
       class(TestShrWiso), intent(inout) :: this
-   
+
       real(r8) :: vap_liq_frac_18O       ! Reciprocal of the H218O liquid/vapor equilibrium fractionation factor
       real(r8) :: vap_liq_frac_18O_prev
       integer  :: i
 
-      ! Calculate first function value, and check that it is greater than zero:
+      ! Calculate first function value, and check that it is greater than 0.7:
       vap_liq_frac_18O_prev = 1._r8 / wiso_liq_vap_equil_frac_factor(WATER_SPECIES_TYPE_H218O, liq_temps(1))
 
-      @assertTrue(vap_liq_frac_18O_prev > 0._r8)
+      @assertTrue(vap_liq_frac_18O_prev > 0.7_r8)
 
       ! Now loop over the rest of the temperatures, checking that the reciprocal (vapor/liquid)
       ! values increase with increasing temperature:
       do i = 2, size(liq_temps)
          vap_liq_frac_18O = 1._r8 / wiso_liq_vap_equil_frac_factor(WATER_SPECIES_TYPE_H218O, liq_temps(i))
-   
+
          @assertTrue(vap_liq_frac_18O > vap_liq_frac_18O_prev)
          vap_liq_frac_18O_prev = vap_liq_frac_18O
       end do
@@ -127,25 +130,28 @@ contains
    @Test
    subroutine test_shr_wiso_liq_vap_equil_frac_factor_h217o_properties(this)
       ! Test that the reciprocal of the H217O liquid/vapor equilibrium fractionation
-      ! factor lies strictly between 0 and 1 for temperatures from 233 K to 313 K,
+      ! factor lies strictly between 0.7 and 1 for temperatures from 233 K to 313 K,
       ! and that the reciprocal increases with increasing temperature.
+      !
+      ! Note that technically 0.7 is physically possible, just significantly outside
+      ! the temperature range seen in the Earth System.
 
       class(TestShrWiso), intent(inout) :: this
-   
+
       real(r8) :: vap_liq_frac_17O       ! Reciprocal of the H217O liquid/vapor equilibrium fractionation factor
       real(r8) :: vap_liq_frac_17O_prev
       integer  :: i
 
-      ! Calculate first function value, and check that it is greater than zero:
+      ! Calculate first function value, and check that it is greater than 0.7:
       vap_liq_frac_17O_prev = 1._r8 / wiso_liq_vap_equil_frac_factor(WATER_SPECIES_TYPE_H217O, liq_temps(1))
 
-      @assertTrue(vap_liq_frac_17O_prev > 0._r8)
+      @assertTrue(vap_liq_frac_17O_prev > 0.7_r8)
 
       ! Now loop over the rest of the temperatures, checking that the reciprocal (vapor/liquid)
       ! values increase with increasing temperature:
       do i = 2, size(liq_temps)
          vap_liq_frac_17O = 1._r8 / wiso_liq_vap_equil_frac_factor(WATER_SPECIES_TYPE_H217O, liq_temps(i))
-   
+
          @assertTrue(vap_liq_frac_17O > vap_liq_frac_17O_prev)
          vap_liq_frac_17O_prev = vap_liq_frac_17O
       end do
@@ -160,25 +166,28 @@ contains
    @Test
    subroutine test_shr_wiso_liq_vap_equil_frac_factor_hdo_properties(this)
       ! Test that the reciprocal of the HDO liquid/vapor equilibrium fractionation
-      ! factor lies strictly between 0 and 1 for temperatures from 233 K to 313 K,
+      ! factor lies strictly between 0.7 and 1 for temperatures from 233 K to 313 K,
       ! and that the reciprocal increases with increasing temperature.
+      !
+      ! Note that technically 0.7 is physically possible, just significantly outside
+      ! the temperature range seen in the Earth System.
 
       class(TestShrWiso), intent(inout) :: this
-   
+
       real(r8) :: vap_liq_frac_HDO       ! Reciprocal of the HDO liquid/vapor equilibrium fractionation factor
       real(r8) :: vap_liq_frac_HDO_prev
       integer  :: i
 
-      ! Calculate first function value, and check that it is greater than zero:
+      ! Calculate first function value, and check that it is greater than 0.7:
       vap_liq_frac_HDO_prev = 1._r8 / wiso_liq_vap_equil_frac_factor(WATER_SPECIES_TYPE_HDO, liq_temps(1))
 
-      @assertTrue(vap_liq_frac_HDO_prev > 0._r8)
+      @assertTrue(vap_liq_frac_HDO_prev > 0.7_r8)
 
       ! Now loop over the rest of the temperatures, checking that the reciprocal (vapor/liquid)
       ! values increase with increasing temperature:
       do i = 2, size(liq_temps)
          vap_liq_frac_HDO = 1._r8 / wiso_liq_vap_equil_frac_factor(WATER_SPECIES_TYPE_HDO, liq_temps(i))
-   
+
          @assertTrue(vap_liq_frac_HDO > vap_liq_frac_HDO_prev)
          vap_liq_frac_HDO_prev = vap_liq_frac_HDO
       end do
@@ -238,25 +247,28 @@ contains
    @Test
    subroutine test_shr_wiso_ice_vap_equil_frac_factor_h218o_properties(this)
       ! Test that the reciprocal of the H218O ice/vapor equilibrium fractionation
-      ! factor lies strictly between 0 and 1 for temperatures from 203 K to 273 K,
+      ! factor lies strictly between 0.7 and 1 for temperatures from 203 K to 273 K,
       ! and that the reciprocal increases with increasing temperature.
+      !
+      ! Note that technically 0.7 is physically possible, just significantly outside
+      ! the temperature range seen in the Earth System.
 
       class(TestShrWiso), intent(inout) :: this
-   
+
       real(r8) :: vap_ice_frac_18O       ! Reciprocal of the H218O ice/vapor equilibrium fractionation factor
       real(r8) :: vap_ice_frac_18O_prev
       integer  :: i
 
-      ! Calculate first function value, and check that it is greater than zero:
+      ! Calculate first function value, and check that it is greater than 0.7:
       vap_ice_frac_18O_prev = 1._r8 / wiso_ice_vap_equil_frac_factor(WATER_SPECIES_TYPE_H218O, ice_temps(1))
 
-      @assertTrue(vap_ice_frac_18O_prev > 0._r8)
+      @assertTrue(vap_ice_frac_18O_prev > 0.7_r8)
 
       ! Now loop over the rest of the temperatures, checking that the reciprocal (vapor/ice)
       ! values increase with increasing temperature:
       do i = 2, size(ice_temps)
          vap_ice_frac_18O = 1._r8 / wiso_ice_vap_equil_frac_factor(WATER_SPECIES_TYPE_H218O, ice_temps(i))
-   
+
          @assertTrue(vap_ice_frac_18O > vap_ice_frac_18O_prev)
          vap_ice_frac_18O_prev = vap_ice_frac_18O
       end do
@@ -271,25 +283,28 @@ contains
    @Test
    subroutine test_shr_wiso_ice_vap_equil_frac_factor_h217o_properties(this)
       ! Test that the reciprocal of the H217O ice/vapor equilibrium fractionation
-      ! factor lies strictly between 0 and 1 for temperatures from 203 K to 273 K,
+      ! factor lies strictly between 0.7 and 1 for temperatures from 203 K to 273 K,
       ! and that the reciprocal increases with increasing temperature.
+      !
+      ! Note that technically 0.7 is physically possible, just significantly outside
+      ! the temperature range seen in the Earth System.
 
       class(TestShrWiso), intent(inout) :: this
-   
+
       real(r8) :: vap_ice_frac_17O       ! Reciprocal of the H217O ice/vapor equilibrium fractionation factor
       real(r8) :: vap_ice_frac_17O_prev
       integer  :: i
 
-      ! Calculate first function value, and check that it is greater than zero:
+      ! Calculate first function value, and check that it is greater than 0.7:
       vap_ice_frac_17O_prev = 1._r8 / wiso_ice_vap_equil_frac_factor(WATER_SPECIES_TYPE_H217O, ice_temps(1))
 
-      @assertTrue(vap_ice_frac_17O_prev > 0._r8)
+      @assertTrue(vap_ice_frac_17O_prev > 0.7_r8)
 
       ! Now loop over the rest of the temperatures, checking that the reciprocal (vapor/ice)
       ! values increase with increasing temperature:
       do i = 2, size(ice_temps)
          vap_ice_frac_17O = 1._r8 / wiso_ice_vap_equil_frac_factor(WATER_SPECIES_TYPE_H217O, ice_temps(i))
-   
+
          @assertTrue(vap_ice_frac_17O > vap_ice_frac_17O_prev)
          vap_ice_frac_17O_prev = vap_ice_frac_17O
       end do
@@ -304,25 +319,28 @@ contains
    @Test
    subroutine test_shr_wiso_ice_vap_equil_frac_factor_hdo_properties(this)
       ! Test that the reciprocal of the HDO ice/vapor equilibrium fractionation
-      ! factor lies strictly between 0 and 1 for temperatures from 203 K to 273 K,
+      ! factor lies strictly between 0.7 and 1 for temperatures from 203 K to 273 K,
       ! and that the reciprocal increases with increasing temperature.
+      !
+      ! Note that technically 0.7 is physically possible, just significantly outside
+      ! the temperature range seen in the Earth System.
 
       class(TestShrWiso), intent(inout) :: this
-   
+
       real(r8) :: vap_ice_frac_HDO       ! Reciprocal of the HDO ice/vapor equilibrium fractionation factor
       real(r8) :: vap_ice_frac_HDO_prev
       integer  :: i
 
-      ! Calculate first function value, and check that it is greater than zero:
+      ! Calculate first function value, and check that it is greater than 0.7:
       vap_ice_frac_HDO_prev = 1._r8 / wiso_ice_vap_equil_frac_factor(WATER_SPECIES_TYPE_HDO, ice_temps(1))
 
-      @assertTrue(vap_ice_frac_HDO_prev > 0._r8)
+      @assertTrue(vap_ice_frac_HDO_prev > 0.7_r8)
 
       ! Now loop over the rest of the temperatures, checking that the reciprocal (vapor/ice)
       ! values increase with increasing temperature:
       do i = 2, size(ice_temps)
          vap_ice_frac_HDO = 1._r8 / wiso_ice_vap_equil_frac_factor(WATER_SPECIES_TYPE_HDO, ice_temps(i))
-   
+
          @assertTrue(vap_ice_frac_HDO > vap_ice_frac_HDO_prev)
          vap_ice_frac_HDO_prev = vap_ice_frac_HDO
       end do
