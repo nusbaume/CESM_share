@@ -12,10 +12,6 @@ module shr_wiso_mod
 !-----------------------------------------------------------------------
 
   use shr_kind_mod,     only: r8 => shr_kind_r8
-  use shr_wtracers_mod, only: WATER_SPECIES_TYPE_BULK
-  use shr_wtracers_mod, only: WATER_SPECIES_TYPE_H218O
-  use shr_wtracers_mod, only: WATER_SPECIES_TYPE_H217O
-  use shr_wtracers_mod, only: WATER_SPECIES_TYPE_HDO
 
   implicit none
   private
@@ -28,6 +24,10 @@ module shr_wiso_mod
 
   public :: wiso_liq_vap_equil_frac_factor ! Function for calculating liquid/vapor equilibrium fractionation factor
   public :: wiso_ice_vap_equil_frac_factor ! Function for calculating ice/vapor equilibrium fractionation factor
+
+  ! Generic isotope property query routines (used by most/all component models):
+
+  public :: wiso_get_diffusivity_ratio     ! Function for querying the water isotope molecular diffusivity ratio
 
   !Atmosphere-Ocean flux calculation routines (used only by the atm/ocn flux modules):
 
@@ -46,8 +46,8 @@ module shr_wiso_mod
 ! Journal of Chemical Physics, 69, 2864-2871, September 1978
 ! DOI: 10.1063/1.436884
 
-real(r8), parameter :: DIFF_RATIO_HDO   = 0.9757_r8
-real(r8), parameter :: DIFF_RATIO_H218O = 0.9727_r8
+real(r8), parameter, public :: DIFF_RATIO_HDO   = 0.9757_r8
+real(r8), parameter, public :: DIFF_RATIO_H218O = 0.9727_r8
 
 ! Diffusivity ratio for H217O relative to H216O:
 
@@ -58,7 +58,7 @@ real(r8), parameter :: DIFF_RATIO_H218O = 0.9727_r8
 ! Rapid Communications in Mass Spectrometry, 21, 2999-3005, August 2007
 ! DOI: 10.1002/rcm.3180
 
-real(r8), parameter :: DIFF_RATIO_H217O = DIFF_RATIO_H218O**0.5185
+real(r8), parameter, public :: DIFF_RATIO_H217O = DIFF_RATIO_H218O**0.5185
 
 !=======================================================================
 
@@ -82,6 +82,11 @@ contains
 
     use shr_kind_mod, only: cl=>shr_kind_cl
     use shr_sys_mod,  only: shr_sys_abort
+
+    use shr_wtracers_mod, only: WATER_SPECIES_TYPE_BULK
+    use shr_wtracers_mod, only: WATER_SPECIES_TYPE_H218O
+    use shr_wtracers_mod, only: WATER_SPECIES_TYPE_H217O
+    use shr_wtracers_mod, only: WATER_SPECIES_TYPE_HDO
 
     ! Function input arguements
     integer , intent(in)        :: isp  ! water species type index (e.g., H2O, HDO, H218O)
@@ -214,6 +219,11 @@ contains
 
     use shr_kind_mod, only: cl=>shr_kind_cl
     use shr_sys_mod,  only: shr_sys_abort
+
+    use shr_wtracers_mod, only: WATER_SPECIES_TYPE_BULK
+    use shr_wtracers_mod, only: WATER_SPECIES_TYPE_H218O
+    use shr_wtracers_mod, only: WATER_SPECIES_TYPE_H217O
+    use shr_wtracers_mod, only: WATER_SPECIES_TYPE_HDO
 
     ! Function input arguements
     integer , intent(in)        :: isp  ! water species type index (e.g., H2O, HDO, H218O)
@@ -364,6 +374,61 @@ contains
 
 !=======================================================================
 
+!-------------------------------------
+!Isotope property query routines:
+!-------------------------------------
+
+!=======================================================================
+
+  function wiso_get_diffusivity_ratio(isp) result(diff_ratio)
+
+    !-----------------------------------------------------------------------
+    ! Public function that returns the molecular diffusivity ratio of a
+    ! water isotopologue relative to H216O, given a water isotope species index.
+    !-----------------------------------------------------------------------
+
+    use shr_kind_mod, only: cl=>shr_kind_cl
+    use shr_sys_mod,  only: shr_sys_abort
+
+    use shr_wtracers_mod, only: WATER_SPECIES_TYPE_BULK
+    use shr_wtracers_mod, only: WATER_SPECIES_TYPE_H218O
+    use shr_wtracers_mod, only: WATER_SPECIES_TYPE_H217O
+    use shr_wtracers_mod, only: WATER_SPECIES_TYPE_HDO
+
+    ! Function input arguments
+    integer, intent(in) :: isp  ! water species type index (e.g., H2O, HDO, H218O)
+
+    ! Return value (molecular diffusivity ratio relative to H216O)
+    real(r8) :: diff_ratio
+
+    ! Character array to store abort error message
+    character(len=cl) :: abort_msg
+
+    !-----------------------------------------------------------------------
+
+    ! Initialize the diffusion ratio to a huge negative (unphysical) value:
+    diff_ratio = huge(-1._r8)
+
+    select case (isp)
+      case(WATER_SPECIES_TYPE_BULK)
+        ! No kinetic fractionation for H2O
+        diff_ratio = 1._r8
+      case (WATER_SPECIES_TYPE_H218O)
+        diff_ratio = DIFF_RATIO_H218O
+      case (WATER_SPECIES_TYPE_H217O)
+        diff_ratio = DIFF_RATIO_H217O
+      case (WATER_SPECIES_TYPE_HDO)
+        diff_ratio = DIFF_RATIO_HDO
+      case default
+        ! This situation shouldn't happen, so abort the run
+        write(abort_msg,'(a,i0)') 'wiso_get_diffusivity_ratio: ERROR: bad isotope species index; bad index = ', isp
+        call shr_sys_abort(abort_msg)
+    end select
+
+  end function wiso_get_diffusivity_ratio
+
+!=======================================================================
+
 !------------------------------
 !Atmosphere/Ocean flux routines
 !------------------------------
@@ -403,6 +468,11 @@ contains
 
     use shr_kind_mod, only: cl=>shr_kind_cl
     use shr_sys_mod,  only: shr_sys_abort
+
+    use shr_wtracers_mod, only: WATER_SPECIES_TYPE_BULK
+    use shr_wtracers_mod, only: WATER_SPECIES_TYPE_H218O
+    use shr_wtracers_mod, only: WATER_SPECIES_TYPE_H217O
+    use shr_wtracers_mod, only: WATER_SPECIES_TYPE_HDO
 
     integer , intent(in)  :: iso   ! isotope species index
     real(r8), intent(in)  :: rbot  ! density of lowest layer (kg/m3)
