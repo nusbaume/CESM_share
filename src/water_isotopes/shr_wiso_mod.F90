@@ -54,7 +54,7 @@ real(r8), parameter, public :: DIFF_RATIO_H218O = 0.9727_r8
 ! Exponent value from:
 
 ! Barkan, E. and B. Luz,
-! Diffusivity fractionations of HO/HO and HO/HO in air and their implications for isotope hydrology
+! Diffusivity fractionations of H216O/H217O and H216O/H218O in air and their implications for isotope hydrology
 ! Rapid Communications in Mass Spectrometry, 21, 2999-3005, August 2007
 ! DOI: 10.1002/rcm.3180
 
@@ -90,7 +90,7 @@ contains
 
     ! Function input arguements
     integer , intent(in)        :: isp  ! water species type index (e.g., H2O, HDO, H218O)
-    real(r8), intent(in)        :: tk   ! Temperature (K)
+    real(r8), intent(in)        :: tk   ! Temperature [K]
 
     ! Return value (equilibrium fractionation factor)
     real(r8) :: equil_frac
@@ -148,7 +148,7 @@ contains
     !-----------------------------------------------------------------------
 
     ! Function input arguements
-    real(r8), intent(in)  :: tk   ! Temperature (K)
+    real(r8), intent(in)  :: tk   ! Temperature [K]
 
     ! Return value (HDO equilibrium fractionation factor)
     real(r8) :: equil_frac_HDO
@@ -187,7 +187,7 @@ contains
     !-----------------------------------------------------------------------
 
     ! Function input arguements
-    real(r8), intent(in)  :: tk   ! Temperature (K)
+    real(r8), intent(in)  :: tk   ! Temperature [K]
 
     ! Return value (H218O equilibrium fractionation factor)
     real(r8) :: equil_frac_18O
@@ -227,7 +227,7 @@ contains
 
     ! Function input arguements
     integer , intent(in)        :: isp  ! water species type index (e.g., H2O, HDO, H218O)
-    real(r8), intent(in)        :: tk   ! Temperature (K)
+    real(r8), intent(in)        :: tk   ! Temperature [K]
 
     ! Return value (equilibrium fractionation factor)
     real(r8) :: equil_frac
@@ -285,7 +285,7 @@ contains
     !-----------------------------------------------------------------------
 
     ! Function input arguements
-    real(r8), intent(in)  :: tk   ! Temperature (K)
+    real(r8), intent(in)  :: tk   ! Temperature [K]
 
     ! Return value (HDO equilibrium fractionation factor)
     real(r8) :: equil_frac_HDO
@@ -319,7 +319,7 @@ contains
     !-----------------------------------------------------------------------
 
     ! Function input arguements
-    real(r8), intent(in)  :: tk   ! Temperature (K)
+    real(r8), intent(in)  :: tk   ! Temperature [K]
 
     ! Return value (H218O equilibrium fractionation factor)
     real(r8) :: equil_frac_18O
@@ -548,7 +548,7 @@ contains
 
   !=======================================================================
 
-  pure function icam_atm_ocn_kinetic_frac_factor(iso,rbot,zbot,ustar, diff_ratio) result(alpkn)
+  pure function icam_atm_ocn_kinetic_frac_factor(rbot, zbot, zoq, ustar, diff_ratio) result(alpkn)
 
   !-----------------------------------------------------------------------
   !
@@ -565,25 +565,30 @@ contains
   ! Journal of Advances in Modeling Earth Systems, 9, 2, 949-977, June 2017
   ! DOI: 10.1002/2016MS000839
   !
+  ! Note:  The roughness length now comes from the atm/ocn flux scheme, and
+  !        is no longer calculated using equation 7 from Nusbaumer et al., 2017
+  !
   !-----------------------------------------------------------------------
     use shr_const_mod, only: gravit=>shr_const_g
     use shr_const_mod, only: karman=>shr_const_karman
 
+    ! Note:  Ideally these quantities would be calculate from
+    !        state variables or acquired from the atm/ocn scheme itself,
+    !        but for now just hard code it.
     real(r8), parameter :: difair = 2.36e-5_r8          ! molecular diffusivity of air
     real(r8), parameter :: muair  = 1.7e-5_r8           ! dynamic viscosity of air
                                                         ! about 17 degC, 1.73 at STP (Salby)
 
     !---------------------------- Arguments --------------------------------
-    integer , intent(in)  :: iso   ! species flag
-    real(r8), intent(in)  :: rbot  ! density of lowest layer (kg/m3)
-    real(r8), intent(in)  :: zbot  ! height of lowest level (m)
-    real(r8), intent(in)  :: ustar ! Friction velocity (m/s)
+    real(r8), intent(in)  :: rbot       ! density of lowest layer [kg m-3]
+    real(r8), intent(in)  :: zbot       ! height of lowest atmospheric layer [m]
+    real(r8), intent(in)  :: zoq        ! surface roughness length for water [m]
+    real(r8), intent(in)  :: ustar      ! friction velocity [m s-1]
     real(r8), intent(in)  :: diff_ratio ! isotopic diffusion ratio
 
     real(r8) :: alpkn ! kinetic fractionation factor (1-kmol)
 
     !------------------------- Local Variables -----------------------------
-    real(r8) z0                 ! roughness length (constant in cam 9.5e-5)
     real(r8) reno               ! surface reynolds number
     real(r8) tmr                ! ratio of turbulent to molecular resistance
     real(r8) enn                ! diffusive power
@@ -595,17 +600,16 @@ contains
     real(r8), parameter :: recrit   = 1.0_r8  ! critical Reynolds number for kmol
     !-----------------------------------------------------------------------
 
-    z0 = (ustar**2._r8)/(81.1_r8*gravit)  ! Charnock's equation
     vmu = muair / rbot                    ! kinematic viscosity
     Sc  = vmu/difair                      ! Schmidt number
-    reno = ustar*z0 / vmu                 ! Reynolds number
+    reno = ustar*zoq / vmu                ! Reynolds number
 
     if (reno < recrit) then ! Smooth regime (Re < 0.13)
       enn = 2._r8/3._r8
       tmr  = ( (1._r8/karman)*log(ustar*zbot / (30._r8 * vmu)) ) / (13.6_r8 * Sc**(2._r8/3._r8))
     else                    ! Rough regime (Re > 2)
       enn = 1._r8/2._r8
-      tmr  = ( (1._r8/karman)*log(zbot/z0) - 5._r8) / (7.3_r8 * reno**(1._r8/4._r8) * Sc**(1._r8/2._r8))
+      tmr  = ( (1._r8/karman)*log(zbot/zoq) - 5._r8) / (7.3_r8 * reno**(1._r8/4._r8) * Sc**(1._r8/2._r8))
     end if
 
     difn = (1._r8/diff_ratio)**enn        ! use D/Di, not Di/D
