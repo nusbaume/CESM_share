@@ -20,7 +20,7 @@ module shr_wiso_mod
 ! Public interfaces
 !++++++++++++++++++
 
-  ! Generic fractionation routines (used by most/all component models):
+  ! Generic equilibrium fractionation routines (used by most/all component models):
 
   public :: wiso_liq_vap_equil_frac_factor ! Function for calculating liquid/vapor equilibrium fractionation factor
   public :: wiso_ice_vap_equil_frac_factor ! Function for calculating ice/vapor equilibrium fractionation factor
@@ -29,9 +29,9 @@ module shr_wiso_mod
 
   public :: wiso_get_diffusivity_ratio     ! Function for querying the water isotope molecular diffusivity ratio
 
-  !Atmosphere-Ocean flux calculation routines (used only by the atm/ocn flux modules):
+  ! Kinetic fractionation routines (currently used only by the atm/ocn flux modules):
 
-  public :: wiso_flxoce          ! calculate isotopic ocean evaporation.
+  public :: icam_atm_ocn_kinetic_frac_factor ! Function for calculating kinetic fractionation factor for isotopic atm/ocn fluxes.
 
 !++++++++++++++++++++++++++++++++++++++++++
 ! Physical constants for isotopic molecules
@@ -429,131 +429,18 @@ contains
 
 !=======================================================================
 
-!------------------------------
-!Atmosphere/Ocean flux routines
-!------------------------------
+!-------------------------------------
+!Kinetic fractionation functions:
+!-------------------------------------
 
 !=======================================================================
-
-  function wiso_flxoce(iso, rbot, zbot,  wtbot, &
-                       ts,  rocn, ustar, re,    &
-                       ssq, qbot, qe) result(qflx)
-
-    !-----------------------------------------------------------------------
-    !
-    ! Purpose: compute water tracer exchange from ocean
-    !
-    ! Method:
-    !   Used diagnostics output from (./dom/)flxoce to ensure
-    !   quantities are exactly equal for constituent number 1.
-    !   Isotopic fractionation (equilibrium and kinetci) is applied,
-    !   when needed.
-    !
-
-    !     E = fac (q - qs(ts))
-    !
-    !   where fac is some exchange efficiency and qs is the saturation
-    !   vapour mixing rati at the surface temperature. These are needed
-    !   from calling routine to solve isotopic equivilent.
-    !
-    !     Ei = fac (1-kmol) (qi - qs(ts)*Rocn/alpha)
-    !
-    !   To compute the kinetic drag modifneed also
-    !
-    ! Author:
-    !   David Noone <dcn@caltech.edu> - Mon Jun 30 10:24:49 MDT 2003
-    !
-    !---------------------------- Arguments --------------------------------
-    !
-
-    use shr_kind_mod, only: cl=>shr_kind_cl
-    use shr_sys_mod,  only: shr_sys_abort
-
-    use shr_wtracers_mod, only: WATER_SPECIES_TYPE_BULK
-    use shr_wtracers_mod, only: WATER_SPECIES_TYPE_H218O
-    use shr_wtracers_mod, only: WATER_SPECIES_TYPE_H217O
-    use shr_wtracers_mod, only: WATER_SPECIES_TYPE_HDO
-
-    integer , intent(in)  :: iso   ! isotope species index
-    real(r8), intent(in)  :: rbot  ! density of lowest layer (kg/m3)
-    real(r8), intent(in)  :: zbot  ! height of lowest level (m)
-    real(r8), intent(in)  :: wtbot ! constituents at lowest
-    real(r8), intent(in)  :: qbot  ! bulk water (q) at lowest
-    real(r8), intent(in)  :: qe    ! bulk evaporative flux (evp)
-
-    real(r8), intent(in)  :: ts    ! (sea) surface temperature K
-    real(r8), intent(in)  :: rocn  ! (sea) surface isotope ratio
-    real(r8), intent(in)  :: ustar ! friction velocity (m/s)
-    real(r8), intent(in)  :: re    ! Reynolds number
-    real(r8), intent(in)  :: ssq   ! s.hum. saturation at Ts
-
-    real(r8) :: qflx               ! water tracer flux (kg/kg/s) <-- return value
-
-    ! Local variables
-    real(r8) diff_ratio                   ! isotopic diffusivities ratio
-    real(r8) alpkn                        ! kinetic fractionation efficiency (m)
-    real(r8) delq                         ! spec. hum. difference
-    real(r8) alpha                        ! fractionation factor
-
-    ! Character array to store abort error message
-    character(len=cl) :: abort_msg
-    !-----------------------------------------------------------------------
-
-    !Check that the provided isotopic species is valid:
-    select case  (iso)
-      case(WATER_SPECIES_TYPE_BULK)
-        ! No kinetic fractionation for H2O
-        diff_ratio = 1._r8
-      case (WATER_SPECIES_TYPE_H218O)
-        diff_ratio = DIFF_RATIO_H218O
-      case (WATER_SPECIES_TYPE_H217O)
-        diff_ratio = DIFF_RATIO_H217O
-      case (WATER_SPECIES_TYPE_HDO)
-        diff_ratio = DIFF_RATIO_HDO
-      case default
-        ! This situation shouldn't happen, so abort the run
-        write(abort_msg,'(a,i0)') 'wiso_flxoce: ERROR: bad isotope species index; bad index = ', iso
-        call shr_sys_abort(abort_msg)
-    end select
-
-    !--------------------------
-    !calculate isotopic factors
-    !--------------------------
-
-    alpha = wiso_liq_vap_equil_frac_factor(iso,ts)  ! equilibrium frac. factor
-
-    alpkn = icam_atm_ocn_kinetic_frac_factor(iso,rbot,zbot,ustar,diff_ratio) ! kinetic frac. factor
-
-    !-----------------------------------------------
-    ! Merlivat and Jouzel, 1979 version
-    !-----------------------------------------------
-
-    ! TODO:  This is basically the bulk aerodynamic formula
-    !        for water isotopes.  It might be good to have
-    !        some way to ensure that the bulk water fluxes
-    !        are also using a similar formula, and if not
-    !        to adjust this calculation in order to ensure
-    !        that the isotopic fluxes are physically consistent
-    !    with the bulk fluxes.
-
-    ! Compute the vapour deficit between the atmosphere
-    ! and the "saturated" layer
-    ! just above the ocean surface.
-    delq  = wtbot - ssq*rocn/alpha
-
-    ! Calculate final isotopic flux value
-    qflx = rbot*ustar*alpkn*re*delq
-
-  end function wiso_flxoce
-
-  !=======================================================================
 
   pure function icam_atm_ocn_kinetic_frac_factor(rbot, zbot, zoq, ustar, diff_ratio) result(alpkn)
 
   !-----------------------------------------------------------------------
   !
-  ! Private function to calculate the kinetic fractionation factor for
-  ! ocean evaporation, as used in the original iCAM5 implementation.
+  ! Function to calculate the kinetic fractionation factor for
+  ! ocean evaporation/condensation, as used in the original iCAM5 implementation.
   !
   ! Citation:
   !
@@ -600,9 +487,9 @@ contains
     real(r8), parameter :: recrit   = 1.0_r8  ! critical Reynolds number for kmol
     !-----------------------------------------------------------------------
 
-    vmu = muair / rbot                    ! kinematic viscosity
-    Sc  = vmu/difair                      ! Schmidt number
-    reno = ustar*zoq / vmu                ! Reynolds number
+    vmu = muair / rbot          ! kinematic viscosity
+    Sc  = vmu / difair          ! Schmidt number
+    reno = ustar*zoq / vmu      ! Reynolds number
 
     if (reno < recrit) then ! Smooth regime (Re < 0.13)
       enn = 2._r8/3._r8
