@@ -13,6 +13,9 @@ set(sources_needed
 
 extract_sources("${sources_needed}" "${share_sources}" test_sources)
 
+# This is needed to make ESMF_Stubs.F90 avoid pulling in mpi
+add_definitions(-DHIDE_MPI)
+
 add_pfunit_ctest(shr_wiso
   TEST_SOURCES "${pf_sources}"
   OTHER_SOURCES "${test_sources}")
