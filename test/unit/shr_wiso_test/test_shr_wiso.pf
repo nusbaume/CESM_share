@@ -34,7 +34,6 @@ module test_shr_wiso
    end type TestShrWiso
 
    ! parameters useful for testing
-   !integer,  parameter :: ntemps = 9
 
    real(r8), parameter :: liq_temps(9) = [233._r8, 243._r8, 253._r8, 263._r8, &
                                           273._r8, 283._r8, 293._r8, 303._r8, 313._r8]
