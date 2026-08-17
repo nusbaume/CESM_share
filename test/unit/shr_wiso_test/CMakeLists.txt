@@ -4,7 +4,6 @@ set (pf_sources
 
 set(sources_needed
    shr_wiso_mod.F90
-   shr_wtracers_mod.F90
    shr_kind_mod.F90
    shr_const_mod.F90
    shr_sys_mod.nompi_abortthrows.F90
@@ -12,9 +11,6 @@ set(sources_needed
    )
 
 extract_sources("${sources_needed}" "${share_sources}" test_sources)
-
-# This is needed to make ESMF_Stubs.F90 avoid pulling in mpi
-add_definitions(-DHIDE_MPI)
 
 add_pfunit_ctest(shr_wiso
   TEST_SOURCES "${pf_sources}"
